@@ -1,0 +1,375 @@
+    INFO: 2026-03-11 23:58:33,266:               log.py:   20: Logging to C:\Users\vinee\Documents\C247\Project\emg2qwerty-main_cnn_lstm\mdpdf.log
+   DEBUG: 2026-03-11 23:58:33,266:               cli.py:  103: 247 Project_ CNN+LSTM Approach copy.md
+    INFO: 2026-03-11 23:58:33,268:         converter.py:   14: 247 Project_ CNN+LSTM Approach copy.md
+   DEBUG: 2026-03-11 23:58:33,275:      pdf_renderer.py:  470: printSegment: 247 Project: CNN + LSTM Approach
+   DEBUG: 2026-03-11 23:58:33,278:      pdf_renderer.py:  470: printSegment: CNN + LSTM Model
+   DEBUG: 2026-03-11 23:58:33,280:      pdf_renderer.py:  470: printSegment: In this approach, we pair a 4-layer TDS convolutional encoder with a two-layer bidirectional LSTM (4 CNN + 2
+   DEBUG: 2026-03-11 23:58:33,282:      pdf_renderer.py:  470: printSegment: LSTM).
+   DEBUG: 2026-03-11 23:58:33,283:      pdf_renderer.py:  470: printSegment: The full pipeline is:
+   DEBUG: 2026-03-11 23:58:33,290:      pdf_renderer.py:  470: printSegment: Raw EMG (2kHz) → Log Spectrogram (125Hz) → SpectrogramNorm → MultiBandRotationInvariantMLP → Flatten → 4
+   DEBUG: 2026-03-11 23:58:33,304:      pdf_renderer.py:  470: printSegment: CNN → 2 LSTM → Linear + LogSoftmax → CTC Loss
+   DEBUG: 2026-03-11 23:58:33,346:      pdf_renderer.py:  470: printSegment: The baseline model uses a 4-layer TDS convolutional encoder whose receptive field is bounded (4 layers × 31
+   DEBUG: 2026-03-11 23:58:33,365:      pdf_renderer.py:  470: printSegment: frames = 124 frames ≈ 1 second at 125Hz). While this is sufficient to capture individual keystroke, it cannot model
+   DEBUG: 2026-03-11 23:58:33,380:      pdf_renderer.py:  470: printSegment: longer-range dependencies. By appending a bidirectional LSTM after the full convolutional stack, we give every
+   DEBUG: 2026-03-11 23:58:33,382:      pdf_renderer.py:  470: printSegment: output frame access to the entire sequence
+   DEBUG: 2026-03-11 23:58:33,382:      pdf_renderer.py:  470: printSegment: '
+   DEBUG: 2026-03-11 23:58:33,383:      pdf_renderer.py:  470: printSegment: s past and future context.
+   DEBUG: 2026-03-11 23:58:33,432:      pdf_renderer.py:  470: printSegment: The total parameter count of the model (~17.6M) has the LSTM block accounting for ~12.3M (70%) of all
+   DEBUG: 2026-03-11 23:58:33,461:      pdf_renderer.py:  470: printSegment: parameters. To manage this capacity and prevent overfitting, we employ several regularization strategies: dropout
+   DEBUG: 2026-03-11 23:58:33,474:      pdf_renderer.py:  470: printSegment: (0.3) between LSTM layers, an additional dropout (0.1) before the output linear layer, AdamW optimizer with
+   DEBUG: 2026-03-11 23:58:33,475:      pdf_renderer.py:  470: printSegment: weight decay (1e-4), and gradient norm clipping (5.0) to stabilize the LSTM + CTC training dynamics. The LSTM
+   DEBUG: 2026-03-11 23:58:33,476:      pdf_renderer.py:  470: printSegment: '
+   DEBUG: 2026-03-11 23:58:33,487:      pdf_renderer.py:  470: printSegment: s
+   DEBUG: 2026-03-11 23:58:33,494:      pdf_renderer.py:  470: printSegment: projection layer is zero-initialized so that the residual connection starts as an identity mapping, allowing the
+   DEBUG: 2026-03-11 23:58:33,496:      pdf_renderer.py:  470: printSegment: convolutional features to pass through undisturbed at the beginning of training.
+   DEBUG: 2026-03-11 23:58:33,497:      pdf_renderer.py:  470: printSegment: Input Pre-processing
+   DEBUG: 2026-03-11 23:58:33,499:      pdf_renderer.py:  470: printSegment: Raw EMG is sampled at 2kHz from two bands (left hand, right hand), each with 16 electrode channels. The 
+   DEBUG: 2026-03-11 23:58:33,500:      pdf_renderer.py:  470: printSegment: LogSpectrogram
+   DEBUG: 2026-03-11 23:58:33,501:      pdf_renderer.py:  470: printSegment:  transform (
+   DEBUG: 2026-03-11 23:58:33,503:      pdf_renderer.py:  470: printSegment: n_fft=64
+   DEBUG: 2026-03-11 23:58:33,504:      pdf_renderer.py:  470: printSegment: , 
+   DEBUG: 2026-03-11 23:58:33,504:      pdf_renderer.py:  470: printSegment: hop_length=16
+   DEBUG: 2026-03-11 23:58:33,507:      pdf_renderer.py:  470: printSegment: ) converts the time-domain signal into a log-power
+   DEBUG: 2026-03-11 23:58:33,508:      pdf_renderer.py:  470: printSegment: spectrogram, producing 33 frequency bins (
+   DEBUG: 2026-03-11 23:58:33,509:      pdf_renderer.py:  470: printSegment: n_fft/2 + 1 = 33
+   DEBUG: 2026-03-11 23:58:33,515:      pdf_renderer.py:  470: printSegment: ) and downsampling the temporal resolution
+   DEBUG: 2026-03-11 23:58:33,516:      pdf_renderer.py:  470: printSegment: from 2kHz to 125Hz. After this transform, the input tensor entering the model has shape 
+   DEBUG: 2026-03-11 23:58:33,517:      pdf_renderer.py:  470: printSegment: (T, N, 2, 16, 33)
+   DEBUG: 2026-03-11 23:58:33,519:      pdf_renderer.py:  470: printSegment:  — that is:
+   DEBUG: 2026-03-11 23:58:33,521:      pdf_renderer.py:  470: printSegment: time steps, batch size, 2 bands, 16 electrode channels, 33 frequency bins.
+   DEBUG: 2026-03-11 23:58:33,522:      pdf_renderer.py:  470: printSegment: Data augmentations are applied in a specific order within the transform pipeline:
+   DEBUG: 2026-03-11 23:58:33,523:      pdf_renderer.py:  470: printSegment:  1 
+   DEBUG: 2026-03-11 23:58:33,524:      pdf_renderer.py:  470: printSegment: Before the spectrogram (applied to raw EMG):
+   DEBUG: 2026-03-11 23:58:33,526:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-03-11 23:58:33,526:      pdf_renderer.py:  470: printSegment: RandomBandRotation
+   DEBUG: 2026-03-11 23:58:33,533:      pdf_renderer.py:  470: printSegment: : Shifts electrode channel ordering by -1, 0, or +1, applied
+   DEBUG: 2026-03-11 23:58:33,535:      pdf_renderer.py:  470: printSegment: independently to each band (left/right). This augments robustness to slight wristband
+   DEBUG: 2026-03-11 23:58:33,536:      pdf_renderer.py:  470: printSegment: rotations.
+   DEBUG: 2026-03-11 23:58:33,537:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-03-11 23:58:33,538:      pdf_renderer.py:  470: printSegment: TemporalAlignmentJitter
+   DEBUG: 2026-03-11 23:58:33,547:      pdf_renderer.py:  470: printSegment: : Randomly jitters the temporal alignment
+   DEBUG: 2026-03-11 23:58:33,553:      pdf_renderer.py:  470: printSegment: between left and right EMG by up to ±120 samples (60ms at 2kHz), simulating
+   DEBUG: 2026-03-11 23:58:33,555:      pdf_renderer.py:  470: printSegment: natural variation in the synchronization of the two wristbands.
+   DEBUG: 2026-03-11 23:58:33,556:      pdf_renderer.py:  470: printSegment:  2 
+   DEBUG: 2026-03-11 23:58:33,557:      pdf_renderer.py:  470: printSegment: After the spectrogram:
+   DEBUG: 2026-03-11 23:58:33,557:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-03-11 23:58:33,558:      pdf_renderer.py:  470: printSegment: SpecAugment
+   DEBUG: 2026-03-11 23:58:33,567:      pdf_renderer.py:  470: printSegment: : Applies up to 3 time masks (max 25 frames = 200ms each) and up
+   DEBUG: 2026-03-11 23:58:33,572:      pdf_renderer.py:  470: printSegment: to 2 frequency masks (max 4 bins each) to the log-spectrogram, following the
+   DEBUG: 2026-03-11 23:58:33,573:      pdf_renderer.py:  470: printSegment: SpecAugment paper (Park et al., 2019).
+   DEBUG: 2026-03-11 23:58:33,574:      pdf_renderer.py:  470: printSegment: For training, the data is windowed into 4-second segments (
+   DEBUG: 2026-03-11 23:58:33,575:      pdf_renderer.py:  470: printSegment: window_length=8000
+   DEBUG: 2026-03-11 23:58:33,591:      pdf_renderer.py:  470: printSegment:  samples at 2kHz) with
+   DEBUG: 2026-03-11 23:58:33,600:      pdf_renderer.py:  470: printSegment: contextual padding of 1800 samples (900ms) on the left and 200 samples (100ms) on the right. This padding
+   DEBUG: 2026-03-11 23:58:33,603:      pdf_renderer.py:  470: printSegment: provides the convolutional layers with temporal context at window boundaries without introducing label ambiguity.
+   DEBUG: 2026-03-11 23:58:33,605:      pdf_renderer.py:  470: printSegment: SpectrogramNorm
+   DEBUG: 2026-03-11 23:58:33,606:      pdf_renderer.py:  470: printSegment: BatchNorm2d(32)
+   DEBUG: 2026-03-11 23:58:33,613:      pdf_renderer.py:  470: printSegment:  normalizes each of the 2 × 16 = 32 electrode channels independently, computing statistics
+   DEBUG: 2026-03-11 23:58:33,615:      pdf_renderer.py:  470: printSegment: over the (batch, frequency, time) dimensions. This ensures that each electrode channel
+   DEBUG: 2026-03-11 23:58:33,615:      pdf_renderer.py:  470: printSegment: '
+   DEBUG: 2026-03-11 23:58:33,620:      pdf_renderer.py:  470: printSegment: s spectrogram has zero mean
+   DEBUG: 2026-03-11 23:58:33,621:      pdf_renderer.py:  470: printSegment: and unit variance, compensating for differences in electrode impedance and contact quality across channels.
+   DEBUG: 2026-03-11 23:58:33,622:      pdf_renderer.py:  470: printSegment: Shape:
+   DEBUG: 2026-03-11 23:58:33,623:      pdf_renderer.py:  470: printSegment:  (T, N, 2, 16, 33) → (T, N, 2, 16, 33)
+   DEBUG: 2026-03-11 23:58:33,624:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,624:      pdf_renderer.py:  470: printSegment: Parameters:
+   DEBUG: 2026-03-11 23:58:33,627:      pdf_renderer.py:  470: printSegment:  32 (weight) + 32 (bias) = 
+   DEBUG: 2026-03-11 23:58:33,627:      pdf_renderer.py:  470: printSegment: 64
+   DEBUG: 2026-03-11 23:58:33,628:      pdf_renderer.py:  470: printSegment: MultiBandRotationInvariantMLP
+   DEBUG: 2026-03-11 23:58:33,630:      pdf_renderer.py:  470: printSegment: A separate MLP is applied independently to each band (left/right). Each band
+   DEBUG: 2026-03-11 23:58:33,631:      pdf_renderer.py:  470: printSegment: '
+   DEBUG: 2026-03-11 23:58:33,631:      pdf_renderer.py:  470: printSegment: s 
+   DEBUG: 2026-03-11 23:58:33,632:      pdf_renderer.py:  470: printSegment: RotationInvariantMLP
+   DEBUG: 2026-03-11 23:58:33,633:      pdf_renderer.py:  470: printSegment:  works
+   DEBUG: 2026-03-11 23:58:33,633:      pdf_renderer.py:  470: printSegment: as follows:
+   DEBUG: 2026-03-11 23:58:33,634:      pdf_renderer.py:  470: printSegment:  1 
+   DEBUG: 2026-03-11 23:58:33,635:      pdf_renderer.py:  470: printSegment: Rotation augmentation:
+   DEBUG: 2026-03-11 23:58:33,646:      pdf_renderer.py:  470: printSegment:  For each of the 3 offsets (-1, 0, +1), the 16 electrode channels are
+   DEBUG: 2026-03-11 23:58:33,647:      pdf_renderer.py:  470: printSegment: circularly shifted, creating 3 copies of the input. Shape goes from (T, N, 16, 33) to (T, N, 3, 16, 33).
+   DEBUG: 2026-03-11 23:58:33,647:      pdf_renderer.py:  470: printSegment:  2 
+   DEBUG: 2026-03-11 23:58:33,648:      pdf_renderer.py:  470: printSegment: Flatten 
+   DEBUG: 2026-03-11 23:58:33,649:      pdf_renderer.py:  470: printSegment: &
+   DEBUG: 2026-03-11 23:58:33,649:      pdf_renderer.py:  470: printSegment:  MLP:
+   DEBUG: 2026-03-11 23:58:33,651:      pdf_renderer.py:  470: printSegment:  The channel and frequency dims are flattened: 16 × 33 = 528 features. These are
+   DEBUG: 2026-03-11 23:58:33,652:      pdf_renderer.py:  470: printSegment: passed through 
+   DEBUG: 2026-03-11 23:58:33,653:      pdf_renderer.py:  470: printSegment: Linear(528, 384) → ReLU
+   DEBUG: 2026-03-11 23:58:33,665:      pdf_renderer.py:  470: printSegment: . Shape: (T, N, 3, 384).
+   DEBUG: 2026-03-11 23:58:33,665:      pdf_renderer.py:  470: printSegment:  3 
+   DEBUG: 2026-03-11 23:58:33,666:      pdf_renderer.py:  470: printSegment: Mean pooling:
+   DEBUG: 2026-03-11 23:58:33,667:      pdf_renderer.py:  470: printSegment:  Pool over the 3 rotation variants. Shape: (T, N, 384).
+   DEBUG: 2026-03-11 23:58:33,668:      pdf_renderer.py:  470: printSegment: After both bands are processed, their outputs are stacked back together.
+   DEBUG: 2026-03-11 23:58:33,669:      pdf_renderer.py:  470: printSegment: Shape:
+   DEBUG: 2026-03-11 23:58:33,670:      pdf_renderer.py:  470: printSegment:  (T, N, 2, 16, 33) → (T, N, 2, 384)
+   DEBUG: 2026-03-11 23:58:33,670:      pdf_renderer.py:  470: printSegment: A simple 
+   DEBUG: 2026-03-11 23:58:33,671:      pdf_renderer.py:  470: printSegment: Flatten(start_dim=2)
+   DEBUG: 2026-03-11 23:58:33,673:      pdf_renderer.py:  470: printSegment:  merges the band and MLP-feature dimensions: 2 × 384 = 768 features. This
+   DEBUG: 2026-03-11 23:58:33,674:      pdf_renderer.py:  470: printSegment: is the 
+   DEBUG: 2026-03-11 23:58:33,674:      pdf_renderer.py:  470: printSegment: num_features
+   DEBUG: 2026-03-11 23:58:33,675:      pdf_renderer.py:  470: printSegment:  used throughout the rest of the model.
+   DEBUG: 2026-03-11 23:58:33,676:      pdf_renderer.py:  470: printSegment: Shape:
+   DEBUG: 2026-03-11 23:58:33,678:      pdf_renderer.py:  470: printSegment:  (T, N, 2, 384) → (T, N, 768)
+   DEBUG: 2026-03-11 23:58:33,678:      pdf_renderer.py:  470: printSegment: Parameters per band:
+   DEBUG: 2026-03-11 23:58:33,679:      pdf_renderer.py:  470: printSegment:  528 × 384 + 384 = 203,136
+   DEBUG: 2026-03-11 23:58:33,679:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,680:      pdf_renderer.py:  470: printSegment: Total for both bands: 406,272
+   DEBUG: 2026-03-11 23:58:33,681:      pdf_renderer.py:  470: printSegment: TDSConvEncoder (4 Layers) — Core Local Feature Extractor
+   DEBUG: 2026-03-11 23:58:33,694:      pdf_renderer.py:  470: printSegment: The encoder uses all 4 TDS convolutional layers to build a deep local feature hierarchy. Each layer consists of a 
+   DEBUG: 2026-03-11 23:58:33,695:      pdf_renderer.py:  470: printSegment: TDSConv2dBlock
+   DEBUG: 2026-03-11 23:58:33,695:      pdf_renderer.py:  470: printSegment:  followed by a 
+   DEBUG: 2026-03-11 23:58:33,696:      pdf_renderer.py:  470: printSegment: TDSFullyConnectedBlock
+   DEBUG: 2026-03-11 23:58:33,697:      pdf_renderer.py:  470: printSegment: , both with residual connections and layer
+   DEBUG: 2026-03-11 23:58:33,698:      pdf_renderer.py:  470: printSegment: normalization.
+   DEBUG: 2026-03-11 23:58:33,699:      pdf_renderer.py:  470: printSegment: TDSConv2dBlock
+   DEBUG: 2026-03-11 23:58:33,700:      pdf_renderer.py:  470: printSegment: The 768-dimensional feature vector is reshaped into a 2D map of shape (24 channels, 32 width). The convolution 
+   DEBUG: 2026-03-11 23:58:33,701:      pdf_renderer.py:  470: printSegment: Conv2d(24, 24, kernel_size=(1, 32))
+   DEBUG: 2026-03-11 23:58:33,712:      pdf_renderer.py:  470: printSegment:  applies a temporal-only convolution: each of the 32 width
+   DEBUG: 2026-03-11 23:58:33,717:      pdf_renderer.py:  470: printSegment: positions is processed independently across time, while the 24 channels are mixed via the learned convolution
+   DEBUG: 2026-03-11 23:58:33,718:      pdf_renderer.py:  470: printSegment: filters. This is the 
+   DEBUG: 2026-03-11 23:58:33,719:      pdf_renderer.py:  470: printSegment: "
+   DEBUG: 2026-03-11 23:58:33,719:      pdf_renderer.py:  470: printSegment: time-depth separable
+   DEBUG: 2026-03-11 23:58:33,720:      pdf_renderer.py:  470: printSegment: "
+   DEBUG: 2026-03-11 23:58:33,726:      pdf_renderer.py:  470: printSegment:  idea from the TDS paper (Hannun et al., 2019) — depth (width) and time are
+   DEBUG: 2026-03-11 23:58:33,728:      pdf_renderer.py:  470: printSegment: handled separately, reducing parameter count compared to a full 2D convolution.
+   DEBUG: 2026-03-11 23:58:33,729:      pdf_renderer.py:  470: printSegment: The 32-step temporal kernel at 125Hz covers 
+   DEBUG: 2026-03-11 23:58:33,729:      pdf_renderer.py:  470: printSegment: 256ms
+   DEBUG: 2026-03-11 23:58:33,730:      pdf_renderer.py:  470: printSegment: , roughly the duration of a single keystroke
+   DEBUG: 2026-03-11 23:58:33,731:      pdf_renderer.py:  470: printSegment: '
+   DEBUG: 2026-03-11 23:58:33,735:      pdf_renderer.py:  470: printSegment: s EMG burst plus its
+   DEBUG: 2026-03-11 23:58:33,736:      pdf_renderer.py:  470: printSegment: surrounding context, making it well-suited for extracting local keystroke features.
+   DEBUG: 2026-03-11 23:58:33,737:      pdf_renderer.py:  470: printSegment: Each block reduces the temporal dimension by 
+   DEBUG: 2026-03-11 23:58:33,738:      pdf_renderer.py:  470: printSegment: kernel_width - 1 = 31
+   DEBUG: 2026-03-11 23:58:33,740:      pdf_renderer.py:  470: printSegment:  frames. After 4 layers, the total
+   DEBUG: 2026-03-11 23:58:33,741:      pdf_renderer.py:  470: printSegment: temporal reduction is 
+   DEBUG: 2026-03-11 23:58:33,741:      pdf_renderer.py:  470: printSegment: 124 frames (~1 second)
+   DEBUG: 2026-03-11 23:58:33,742:      pdf_renderer.py:  470: printSegment: .
+   DEBUG: 2026-03-11 23:58:33,743:      pdf_renderer.py:  470: printSegment: Input (T, N, 768)
+   DEBUG: 2026-03-11 23:58:33,743:      pdf_renderer.py:  470: printSegment:   → Reshape to (N, 24, 32, T)
+   DEBUG: 2026-03-11 23:58:33,744:      pdf_renderer.py:  470: printSegment:   → Conv2d(24, 24, kernel=(1, 32)) + ReLU
+   DEBUG: 2026-03-11 23:58:33,745:      pdf_renderer.py:  470: printSegment:   → Reshape to (T-31, N, 768)
+   DEBUG: 2026-03-11 23:58:33,746:      pdf_renderer.py:  470: printSegment:   → Skip connection: x + input[-T_out:]
+   DEBUG: 2026-03-11 23:58:33,747:      pdf_renderer.py:  470: printSegment:   → LayerNorm(768)
+   DEBUG: 2026-03-11 23:58:33,748:      pdf_renderer.py:  470: printSegment: Parameters per block:
+   DEBUG: 2026-03-11 23:58:33,749:      pdf_renderer.py:  470: printSegment:  Conv2d: 24 × 24 × 32 + 24 = 18,456; LayerNorm: 1,536 → 
+   DEBUG: 2026-03-11 23:58:33,750:      pdf_renderer.py:  470: printSegment: ~20K
+   DEBUG: 2026-03-11 23:58:33,750:      pdf_renderer.py:  470: printSegment: TDSFullyConnectedBlock
+   DEBUG: 2026-03-11 23:58:33,751:      pdf_renderer.py:  470: printSegment: A two-layer feed-forward network with a residual connection:
+   DEBUG: 2026-03-11 23:58:33,752:      pdf_renderer.py:  470: printSegment: Input (T, N, 768)
+   DEBUG: 2026-03-11 23:58:33,754:      pdf_renderer.py:  470: printSegment:   → Linear(768, 768) + ReLU
+   DEBUG: 2026-03-11 23:58:33,754:      pdf_renderer.py:  470: printSegment:   → Linear(768, 768)
+   DEBUG: 2026-03-11 23:58:33,755:      pdf_renderer.py:  470: printSegment:   → Skip connection: x + input
+   DEBUG: 2026-03-11 23:58:33,755:      pdf_renderer.py:  470: printSegment:   → LayerNorm(768)
+   DEBUG: 2026-03-11 23:58:33,756:      pdf_renderer.py:  470: printSegment: Parameters per block:
+   DEBUG: 2026-03-11 23:58:33,757:      pdf_renderer.py:  470: printSegment:  2 × (768 × 768 + 768) + 1,536 = 
+   DEBUG: 2026-03-11 23:58:33,757:      pdf_renderer.py:  470: printSegment: ~1.18M
+   DEBUG: 2026-03-11 23:58:33,758:      pdf_renderer.py:  470: printSegment: Total TDSConvEncoder
+   DEBUG: 2026-03-11 23:58:33,759:      pdf_renderer.py:  470: printSegment: 4 × (TDSConv2dBlock + TDSFullyConnectedBlock) = 4 × (~20K + ~1.18M) = 
+   DEBUG: 2026-03-11 23:58:33,760:      pdf_renderer.py:  470: printSegment: ~4.82M parameters
+   DEBUG: 2026-03-11 23:58:33,760:      pdf_renderer.py:  470: printSegment: Shape:
+   DEBUG: 2026-03-11 23:58:33,762:      pdf_renderer.py:  470: printSegment:  (T, N, 768) → (T − 124, N, 768)
+   DEBUG: 2026-03-11 23:58:33,763:      pdf_renderer.py:  470: printSegment: For a typical 4-second training window: T ≈ 620 → 
+   DEBUG: 2026-03-11 23:58:33,763:      pdf_renderer.py:  470: printSegment: T ≈ 496 frames
+   DEBUG: 2026-03-11 23:58:33,775:      pdf_renderer.py:  470: printSegment:  after the encoder.
+   DEBUG: 2026-03-11 23:58:33,776:      pdf_renderer.py:  470: printSegment: LSTMBlock — Global Temporal Context
+   DEBUG: 2026-03-11 23:58:33,779:      pdf_renderer.py:  470: printSegment: This is the key addition over the baseline. A 2-layer bidirectional LSTM captures long-range dependencies across
+   DEBUG: 2026-03-11 23:58:33,780:      pdf_renderer.py:  470: printSegment: the entire sequence.
+   DEBUG: 2026-03-11 23:58:33,781:      pdf_renderer.py:  470: printSegment: Architecture
+   DEBUG: 2026-03-11 23:58:33,781:      pdf_renderer.py:  470: printSegment: Input (T, N, 768)
+   DEBUG: 2026-03-11 23:58:33,782:      pdf_renderer.py:  470: printSegment:   → LSTM Layer 1: bidirectional, hidden_size=512 per direction
+   DEBUG: 2026-03-11 23:58:33,783:      pdf_renderer.py:  470: printSegment:     → Output: (T, N, 1024)  [512 forward + 512 backward]
+   DEBUG: 2026-03-11 23:58:33,784:      pdf_renderer.py:  470: printSegment:   → Dropout(0.3) between layers
+   DEBUG: 2026-03-11 23:58:33,785:      pdf_renderer.py:  470: printSegment:   → LSTM Layer 2: bidirectional, hidden_size=512 per direction
+   DEBUG: 2026-03-11 23:58:33,786:      pdf_renderer.py:  470: printSegment:     → Output: (T, N, 1024)
+   DEBUG: 2026-03-11 23:58:33,786:      pdf_renderer.py:  470: printSegment:   → Linear projection: (T, N, 1024) → (T, N, 768)
+   DEBUG: 2026-03-11 23:58:33,787:      pdf_renderer.py:  470: printSegment:   → Residual connection: x + input
+   DEBUG: 2026-03-11 23:58:33,788:      pdf_renderer.py:  470: printSegment:   → LayerNorm(768)
+   DEBUG: 2026-03-11 23:58:33,788:      pdf_renderer.py:  470: printSegment: LSTM Unit
+   DEBUG: 2026-03-11 23:58:33,790:      pdf_renderer.py:  470: printSegment: Each LSTM unit uses three gates (input, forget, output) and a cell state:
+   DEBUG: 2026-03-11 23:58:33,790:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-03-11 23:58:33,791:      pdf_renderer.py:  470: printSegment: Forget gate:
+   DEBUG: 2026-03-11 23:58:33,792:      pdf_renderer.py:  470: printSegment:  Decides what information to discard from the cell state
+   DEBUG: 2026-03-11 23:58:33,793:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-03-11 23:58:33,794:      pdf_renderer.py:  470: printSegment: Input gate:
+   DEBUG: 2026-03-11 23:58:33,795:      pdf_renderer.py:  470: printSegment:  Decides what new information to store in the cell state
+   DEBUG: 2026-03-11 23:58:33,795:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-03-11 23:58:33,796:      pdf_renderer.py:  470: printSegment: Output gate:
+   DEBUG: 2026-03-11 23:58:33,797:      pdf_renderer.py:  470: printSegment:  Decides what part of the cell state to expose as the hidden state
+   DEBUG: 2026-03-11 23:58:33,805:      pdf_renderer.py:  470: printSegment: The cell state acts as a memory highway that can carry information across hundreds of time steps with minimal
+   DEBUG: 2026-03-11 23:58:33,807:      pdf_renderer.py:  470: printSegment: degradation — critical for modeling dependencies spanning entire sentences of typing.
+   DEBUG: 2026-03-11 23:58:33,807:      pdf_renderer.py:  470: printSegment: Design Decisions
+   DEBUG: 2026-03-11 23:58:33,808:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-03-11 23:58:33,809:      pdf_renderer.py:  470: printSegment: Bidirectional
+   DEBUG: 2026-03-11 23:58:33,817:      pdf_renderer.py:  470: printSegment:  — Since this is an offline transcription task (not real-time streaming), the model can look
+   DEBUG: 2026-03-11 23:58:33,819:      pdf_renderer.py:  470: printSegment: at the entire sequence. Every output frame gets full past + future context.
+   DEBUG: 2026-03-11 23:58:33,819:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-03-11 23:58:33,820:      pdf_renderer.py:  470: printSegment: hidden
+   DEBUG: 2026-03-11 23:58:33,820:      pdf_renderer.py:  470: printSegment: _
+   DEBUG: 2026-03-11 23:58:33,821:      pdf_renderer.py:  470: printSegment: size=512
+   DEBUG: 2026-03-11 23:58:33,825:      pdf_renderer.py:  470: printSegment:  — With 2 directions, the LSTM output is 512 × 2 = 1024 dimensions. A linear
+   DEBUG: 2026-03-11 23:58:33,826:      pdf_renderer.py:  470: printSegment: projection maps this back to 768, matching 
+   DEBUG: 2026-03-11 23:58:33,826:      pdf_renderer.py:  470: printSegment: num_features
+   DEBUG: 2026-03-11 23:58:33,828:      pdf_renderer.py:  470: printSegment: .
+   DEBUG: 2026-03-11 23:58:33,829:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-03-11 23:58:33,829:      pdf_renderer.py:  470: printSegment: Dropout 0.3 between layers
+   DEBUG: 2026-03-11 23:58:33,834:      pdf_renderer.py:  470: printSegment:  — Applied only between Layer 1 and Layer 2. This prevents the second
+   DEBUG: 2026-03-11 23:58:33,835:      pdf_renderer.py:  470: printSegment: layer from over-relying on specific features from the first layer.
+   DEBUG: 2026-03-11 23:58:33,835:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-03-11 23:58:33,837:      pdf_renderer.py:  470: printSegment: Zero-initialized projection
+   DEBUG: 2026-03-11 23:58:33,837:      pdf_renderer.py:  470: printSegment:  — The projection layer
+   DEBUG: 2026-03-11 23:58:33,838:      pdf_renderer.py:  470: printSegment: '
+   DEBUG: 2026-03-11 23:58:33,849:      pdf_renderer.py:  470: printSegment: s weights and biases are initialized to zero. This
+   DEBUG: 2026-03-11 23:58:33,853:      pdf_renderer.py:  470: printSegment: means the model begins training with the pre-existing CNN features passing undisturbed, and the
+   DEBUG: 2026-03-11 23:58:33,854:      pdf_renderer.py:  470: printSegment: LSTM gradually learns to contribute useful global context.
+   DEBUG: 2026-03-11 23:58:33,855:      pdf_renderer.py:  470: printSegment: Parameters
+   DEBUG: 2026-03-11 23:58:33,857:      pdf_renderer.py:  470: printSegment: | Component | Calculation | Parameters |
+   DEBUG: 2026-03-11 23:58:33,858:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,858:      pdf_renderer.py:  470: printSegment: |---|---|---|
+   DEBUG: 2026-03-11 23:58:33,859:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,861:      pdf_renderer.py:  470: printSegment: | LSTM Layer 0 (both directions) | 2 × 4 × (768×512 + 512×512 +
+   DEBUG: 2026-03-11 23:58:33,862:      pdf_renderer.py:  470: printSegment: 512 + 512) | 5,251,072 |
+   DEBUG: 2026-03-11 23:58:33,863:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,864:      pdf_renderer.py:  470: printSegment: | LSTM Layer 1 (both directions) | 2 × 4 × (1024×512 + 512×512 + 512 + 512) | 6,299,648 |
+   DEBUG: 2026-03-11 23:58:33,865:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,867:      pdf_renderer.py:  470: printSegment: |
+   DEBUG: 2026-03-11 23:58:33,868:      pdf_renderer.py:  470: printSegment: Projection Linear(1024, 768) | 1024 × 768 + 768 | 787,200 |
+   DEBUG: 2026-03-11 23:58:33,868:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,869:      pdf_renderer.py:  470: printSegment: | LayerNorm(768) | 768 + 768 | 1,536 |
+   DEBUG: 2026-03-11 23:58:33,869:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,871:      pdf_renderer.py:  470: printSegment: | 
+   DEBUG: 2026-03-11 23:58:33,871:      pdf_renderer.py:  470: printSegment: LSTMBlock
+   DEBUG: 2026-03-11 23:58:33,872:      pdf_renderer.py:  470: printSegment: Total
+   DEBUG: 2026-03-11 23:58:33,873:      pdf_renderer.py:  470: printSegment:  | | 
+   DEBUG: 2026-03-11 23:58:33,873:      pdf_renderer.py:  470: printSegment: 12,339,456
+   DEBUG: 2026-03-11 23:58:33,874:      pdf_renderer.py:  470: printSegment:  |
+   DEBUG: 2026-03-11 23:58:33,875:      pdf_renderer.py:  470: printSegment: Shape:
+   DEBUG: 2026-03-11 23:58:33,876:      pdf_renderer.py:  470: printSegment:  (T − 124, N, 768) → (T − 124, N, 768)
+   DEBUG: 2026-03-11 23:58:33,878:      pdf_renderer.py:  470: printSegment: Output Head
+   DEBUG: 2026-03-11 23:58:33,879:      pdf_renderer.py:  470: printSegment: After the LSTM, a dropout layer (p=0.1) provides additional regularization before the output projection:
+   DEBUG: 2026-03-11 23:58:33,881:      pdf_renderer.py:  470: printSegment: (T, N, 768) → Dropout(0.1) → Linear(768, 99) → LogSoftmax → (T, N, 99)
+   DEBUG: 2026-03-11 23:58:33,884:      pdf_renderer.py:  470: printSegment: The 99 output classes correspond to 98 characters in the character set (a–z, A–Z, 0–9, punctuation, space, enter, backspace,
+   DEBUG: 2026-03-11 23:58:33,886:      pdf_renderer.py:  470: printSegment: shift) plus 1 CTC blank token.
+   DEBUG: 2026-03-11 23:58:33,886:      pdf_renderer.py:  470: printSegment: Parameters:
+   DEBUG: 2026-03-11 23:58:33,887:      pdf_renderer.py:  470: printSegment:  768 × 99 + 99 = 
+   DEBUG: 2026-03-11 23:58:33,888:      pdf_renderer.py:  470: printSegment: 76,131
+   DEBUG: 2026-03-11 23:58:33,888:      pdf_renderer.py:  470: printSegment: --
+   DEBUG: 2026-03-11 23:58:33,889:      pdf_renderer.py:  470: printSegment: Training Configuration
+   DEBUG: 2026-03-11 23:58:33,890:      pdf_renderer.py:  470: printSegment: | Hyperparameter | Value |
+   DEBUG: 2026-03-11 23:58:33,891:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,891:      pdf_renderer.py:  470: printSegment: |---|---|
+   DEBUG: 2026-03-11 23:58:33,892:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,894:      pdf_renderer.py:  470: printSegment: | Optimizer | AdamW |
+   DEBUG: 2026-03-11 23:58:33,896:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,897:      pdf_renderer.py:  470: printSegment: | Peak Learning Rate | 3e-4 |
+   DEBUG: 2026-03-11 23:58:33,898:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,899:      pdf_renderer.py:  470: printSegment: | Weight Decay | 1e-4 |
+   DEBUG: 2026-03-11 23:58:33,899:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,900:      pdf_renderer.py:  470: printSegment: | Max
+   DEBUG: 2026-03-11 23:58:33,901:      pdf_renderer.py:  470: printSegment: Epochs | 150 |
+   DEBUG: 2026-03-11 23:58:33,901:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,903:      pdf_renderer.py:  470: printSegment: | Batch Size | 32 |
+   DEBUG: 2026-03-11 23:58:33,903:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,904:      pdf_renderer.py:  470: printSegment: | Gradient Clip Value | 5.0 |
+   DEBUG: 2026-03-11 23:58:33,905:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,906:      pdf_renderer.py:  470: printSegment: | Window Length | 8000 samples (4 sec at 2kHz) |
+   DEBUG: 2026-03-11 23:58:33,906:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,909:      pdf_renderer.py:  470: printSegment: |
+   DEBUG: 2026-03-11 23:58:33,910:      pdf_renderer.py:  470: printSegment: Padding | 1800 left + 200 right (900ms + 100ms) |
+   DEBUG: 2026-03-11 23:58:33,912:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,913:      pdf_renderer.py:  470: printSegment: | Seed | 1501 |
+   DEBUG: 2026-03-11 23:58:33,914:      pdf_renderer.py:  470: printSegment: Key training stabilization choices:
+   DEBUG: 2026-03-11 23:58:33,914:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-03-11 23:58:33,915:      pdf_renderer.py:  470: printSegment: Gradient clipping (5.0):
+   DEBUG: 2026-03-11 23:58:33,916:      pdf_renderer.py:  470: printSegment:  Prevents gradient explosion from the LSTM
+   DEBUG: 2026-03-11 23:58:33,917:      pdf_renderer.py:  470: printSegment: '
+   DEBUG: 2026-03-11 23:58:33,918:      pdf_renderer.py:  470: printSegment: s recurrent connections.
+   DEBUG: 2026-03-11 23:58:33,918:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-03-11 23:58:33,919:      pdf_renderer.py:  470: printSegment: AdamW with weight decay:
+   DEBUG: 2026-03-11 23:58:33,923:      pdf_renderer.py:  470: printSegment:  Proper decoupled weight decay regularizes the large LSTM parameter
+   DEBUG: 2026-03-11 23:58:33,924:      pdf_renderer.py:  470: printSegment: space without interfering with adaptive learning rates.
+   DEBUG: 2026-03-11 23:58:33,925:      pdf_renderer.py:  470: printSegment: Full Parameter Summary
+   DEBUG: 2026-03-11 23:58:33,926:      pdf_renderer.py:  470: printSegment: | Component | Parameters | % of Total |
+   DEBUG: 2026-03-11 23:58:33,927:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,928:      pdf_renderer.py:  470: printSegment: |---|---|---|
+   DEBUG: 2026-03-11 23:58:33,929:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,929:      pdf_renderer.py:  470: printSegment: | SpectrogramNorm (BatchNorm2d) | 64 | 
+   DEBUG: 2026-03-11 23:58:33,930:      pdf_renderer.py:  470: printSegment: <
+   DEBUG: 2026-03-11 23:58:33,931:      pdf_renderer.py:  470: printSegment: 0.1% |
+   DEBUG: 2026-03-11 23:58:33,932:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,934:      pdf_renderer.py:  470: printSegment: |
+   DEBUG: 2026-03-11 23:58:33,935:      pdf_renderer.py:  470: printSegment: MultiBandRotationInvariantMLP (2 bands) | 406,272 | 2.3% |
+   DEBUG: 2026-03-11 23:58:33,936:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,937:      pdf_renderer.py:  470: printSegment: | TDSConvEncoder (4 layers) | 4,816,992 | 27.3% |
+   DEBUG: 2026-03-11 23:58:33,938:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,940:      pdf_renderer.py:  470: printSegment: |
+   DEBUG: 2026-03-11 23:58:33,942:      pdf_renderer.py:  470: printSegment: LSTMBlock (2-layer bidir LSTM + projection) | 12,339,456 | 69.9% |
+   DEBUG: 2026-03-11 23:58:33,943:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,944:      pdf_renderer.py:  470: printSegment: | Dropout (0.1) | 0 | — |
+   DEBUG: 2026-03-11 23:58:33,944:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,946:      pdf_renderer.py:  470: printSegment: | Output Linear(768, 99) |
+   DEBUG: 2026-03-11 23:58:33,947:      pdf_renderer.py:  470: printSegment: 76,131 | 0.4% |
+   DEBUG: 2026-03-11 23:58:33,947:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-03-11 23:58:33,948:      pdf_renderer.py:  470: printSegment: | 
+   DEBUG: 2026-03-11 23:58:33,949:      pdf_renderer.py:  470: printSegment: Total
+   DEBUG: 2026-03-11 23:58:33,949:      pdf_renderer.py:  470: printSegment:  | 
+   DEBUG: 2026-03-11 23:58:33,950:      pdf_renderer.py:  470: printSegment: ~17.6M
+   DEBUG: 2026-03-11 23:58:33,951:      pdf_renderer.py:  470: printSegment:  | 
+   DEBUG: 2026-03-11 23:58:33,952:      pdf_renderer.py:  470: printSegment: 100%
+   DEBUG: 2026-03-11 23:58:33,952:      pdf_renderer.py:  470: printSegment:  |
+   DEBUG: 2026-03-11 23:58:33,954:      pdf_renderer.py:  470: printSegment: The LSTM block accounts for approximately 70% of all model parameters.
+   DEBUG: 2026-03-11 23:58:33,956:      pdf_renderer.py:  470: printSegment: Data Flow Diagram
+   DEBUG: 2026-03-11 23:58:33,957:      pdf_renderer.py:  470: printSegment: Raw EMG (T_raw=10000, 2 bands, 16 channels)
+   DEBUG: 2026-03-11 23:58:33,958:      pdf_renderer.py:  470: printSegment:   │
+   DEBUG: 2026-03-11 23:58:33,971:      pdf_renderer.py:  470: printSegment:   ├─ RandomBandRotation (±1 channel shift per band)
+   DEBUG: 2026-03-11 23:58:33,990:      pdf_renderer.py:  470: printSegment:   ├─ TemporalAlignmentJitter (±60ms)
+   DEBUG: 2026-03-11 23:58:33,991:      pdf_renderer.py:  470: printSegment:   │
+   DEBUG: 2026-03-11 23:58:33,991:      pdf_renderer.py:  470: printSegment:   ▼  LogSpectrogram (n_fft=64, hop_length=16)
+   DEBUG: 2026-03-11 23:58:34,013:      pdf_renderer.py:  470: printSegment: (T≈620, 2, 16, 33)
+   DEBUG: 2026-03-11 23:58:34,014:      pdf_renderer.py:  470: printSegment:   │
+   DEBUG: 2026-03-11 23:58:34,017:      pdf_renderer.py:  470: printSegment:   ├─ SpecAugment (3 time masks, 2 freq masks)
+   DEBUG: 2026-03-11 23:58:34,018:      pdf_renderer.py:  470: printSegment:   │
+   DEBUG: 2026-03-11 23:58:34,020:      pdf_renderer.py:  470: printSegment:   ▼  SpectrogramNorm                         [64 params]
+   DEBUG: 2026-03-11 23:58:34,021:      pdf_renderer.py:  470: printSegment: (T, N, 2, 16, 33)
+   DEBUG: 2026-03-11 23:58:34,023:      pdf_renderer.py:  470: printSegment:   │
+   DEBUG: 2026-03-11 23:58:34,025:      pdf_renderer.py:  470: printSegment:   ▼  MultiBandRotationInvariantMLP           [406K params]
+   DEBUG: 2026-03-11 23:58:34,028:      pdf_renderer.py:  470: printSegment: (T, N, 2, 384)
+   DEBUG: 2026-03-11 23:58:34,029:      pdf_renderer.py:  470: printSegment:   │
+   DEBUG: 2026-03-11 23:58:34,029:      pdf_renderer.py:  470: printSegment:   ▼  Flatten
+   DEBUG: 2026-03-11 23:58:34,030:      pdf_renderer.py:  470: printSegment: (T, N, 768)
+   DEBUG: 2026-03-11 23:58:34,030:      pdf_renderer.py:  470: printSegment:   │
+   DEBUG: 2026-03-11 23:58:34,031:      pdf_renderer.py:  470: printSegment:   ▼  TDSConvEncoder (4 layers)               [4.82M params]
+   DEBUG: 2026-03-11 23:58:34,032:      pdf_renderer.py:  470: printSegment:   │   ├─ TDSConv2dBlock × 4: temporal conv + skip + LayerNorm
+   DEBUG: 2026-03-11 23:58:34,033:      pdf_renderer.py:  470: printSegment:   │   └─ TDSFullyConnectedBlock × 4: 2-layer FFN + skip + LayerNorm
+   DEBUG: 2026-03-11 23:58:34,034:      pdf_renderer.py:  470: printSegment:   │   (temporal reduction: 4 × 31 = 124 frames)
+   DEBUG: 2026-03-11 23:58:34,034:      pdf_renderer.py:  470: printSegment: (T−124 ≈ 496, N, 768)
+   DEBUG: 2026-03-11 23:58:34,035:      pdf_renderer.py:  470: printSegment:   │
+   DEBUG: 2026-03-11 23:58:34,036:      pdf_renderer.py:  470: printSegment:   ▼  LSTMBlock                               [12.3M params]
+   DEBUG: 2026-03-11 23:58:34,037:      pdf_renderer.py:  470: printSegment:   │   ├─ 2-layer Bidirectional LSTM (hidden=512)
+   DEBUG: 2026-03-11 23:58:34,037:      pdf_renderer.py:  470: printSegment:   │   ├─ Linear projection (1024 → 768, zero-initialized)
+   DEBUG: 2026-03-11 23:58:34,038:      pdf_renderer.py:  470: printSegment:   │   └─ Residual connection + LayerNorm
+   DEBUG: 2026-03-11 23:58:34,039:      pdf_renderer.py:  470: printSegment: (≈496, N, 768)
+   DEBUG: 2026-03-11 23:58:34,039:      pdf_renderer.py:  470: printSegment:   │
+   DEBUG: 2026-03-11 23:58:34,040:      pdf_renderer.py:  470: printSegment:   ▼  Dropout(0.1)                            [0 params]
+   DEBUG: 2026-03-11 23:58:34,041:      pdf_renderer.py:  470: printSegment:   │
+   DEBUG: 2026-03-11 23:58:34,041:      pdf_renderer.py:  470: printSegment:   ▼  Linear(768, 99) + LogSoftmax            [76K params]
+   DEBUG: 2026-03-11 23:58:34,043:      pdf_renderer.py:  470: printSegment: (≈496, N, 99)
+   DEBUG: 2026-03-11 23:58:34,043:      pdf_renderer.py:  470: printSegment:   │
+   DEBUG: 2026-03-11 23:58:34,044:      pdf_renderer.py:  470: printSegment:   ▼  CTC Loss / CTC Decode
+   DEBUG: 2026-03-11 23:58:34,045:      pdf_renderer.py:  470: printSegment:   │
+   DEBUG: 2026-03-11 23:58:34,045:      pdf_renderer.py:  470: printSegment:   ▼  Decoded character sequence
+   DEBUG: 2026-03-11 23:58:34,046:      pdf_renderer.py:   53: 0, [1, '247 Project: CNN + LSTM Approach', 1, 68.0]
+   DEBUG: 2026-03-11 23:58:34,046:      pdf_renderer.py:   53: 1, [2, 'CNN + LSTM Model', 1, 106.0]
+   DEBUG: 2026-03-11 23:58:34,046:      pdf_renderer.py:   53: 2, [2, 'Input Pre-processing', 1, 361.6]
+   DEBUG: 2026-03-11 23:58:34,046:      pdf_renderer.py:   53: 3, [2, 'SpectrogramNorm', 1, 701.2]
+   DEBUG: 2026-03-11 23:58:34,046:      pdf_renderer.py:   53: 4, [2, 'MultiBandRotationInvariantMLP', 2, 158.8]
+   DEBUG: 2026-03-11 23:58:34,046:      pdf_renderer.py:   53: 5, [2, 'TDSConvEncoder (4 Layers) — Core Local Feature Extractor', 2, 408.40000000000003]
+   DEBUG: 2026-03-11 23:58:34,046:      pdf_renderer.py:   53: 6, [3, 'TDSConv2dBlock', 2, 483.6]
+   DEBUG: 2026-03-11 23:58:34,046:      pdf_renderer.py:   53: 7, [3, 'TDSFullyConnectedBlock', 3, 98.4]
+   DEBUG: 2026-03-11 23:58:34,046:      pdf_renderer.py:   53: 8, [3, 'Total TDSConvEncoder', 3, 235.20000000000002]
+   DEBUG: 2026-03-11 23:58:34,046:      pdf_renderer.py:   53: 9, [2, 'LSTMBlock — Global Temporal Context', 3, 330.40000000000003]
+   DEBUG: 2026-03-11 23:58:34,046:      pdf_renderer.py:   53: 10, [3, 'Architecture', 3, 393.6]
+   DEBUG: 2026-03-11 23:58:34,046:      pdf_renderer.py:   53: 11, [3, 'LSTM Unit', 3, 542.4]
+   DEBUG: 2026-03-11 23:58:34,046:      pdf_renderer.py:   53: 12, [3, 'Design Decisions', 3, 667.1999999999999]
+   DEBUG: 2026-03-11 23:58:34,046:      pdf_renderer.py:   53: 13, [3, 'Parameters', 4, 176.4]
+   DEBUG: 2026-03-11 23:58:34,046:      pdf_renderer.py:   53: 14, [2, 'Output Head', 4, 289.6]
+   DEBUG: 2026-03-11 23:58:34,046:      pdf_renderer.py:   53: 15, [2, 'Training Configuration', 4, 431.20000000000005]
+   DEBUG: 2026-03-11 23:58:34,046:      pdf_renderer.py:   53: 16, [2, 'Full Parameter Summary', 4, 584.8]
+   DEBUG: 2026-03-11 23:58:34,047:      pdf_renderer.py:   53: 17, [2, 'Data Flow Diagram', 4, 702.3999999999999]
