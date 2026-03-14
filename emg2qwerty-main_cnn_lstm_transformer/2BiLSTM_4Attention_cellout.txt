@@ -1,0 +1,2026 @@
+[2026-03-09 09:45:23,642][__main__][INFO] - 
+Config:
+user: single_user
+dataset:
+  train:
+  - user: 89335547
+    session: 2021-06-03-1622765527-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-06-02-1622681518-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-06-04-1622863166-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-07-22-1627003020-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-07-21-1626916256-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-07-22-1627004019-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-06-05-1622885888-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-06-02-1622679967-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-06-03-1622764398-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-07-21-1626917264-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-06-05-1622889105-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-06-03-1622766673-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-06-04-1622861066-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-07-22-1627001995-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-06-05-1622884635-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-07-21-1626915176-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  val:
+  - user: 89335547
+    session: 2021-06-04-1622862148-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  test:
+  - user: 89335547
+    session: 2021-06-02-1622682789-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  root: ${hydra:runtime.cwd}/data
+to_tensor:
+  _target_: emg2qwerty.transforms.ToTensor
+  fields:
+  - emg_left
+  - emg_right
+band_rotation:
+  _target_: emg2qwerty.transforms.ForEach
+  transform:
+    _target_: emg2qwerty.transforms.RandomBandRotation
+    offsets:
+    - -1
+    - 0
+    - 1
+temporal_jitter:
+  _target_: emg2qwerty.transforms.TemporalAlignmentJitter
+  max_offset: 120
+logspec:
+  _target_: emg2qwerty.transforms.LogSpectrogram
+  n_fft: 64
+  hop_length: 16
+specaug:
+  _target_: emg2qwerty.transforms.SpecAugment
+  n_time_masks: 3
+  time_mask_param: 25
+  n_freq_masks: 2
+  freq_mask_param: 4
+transforms:
+  train:
+  - ${to_tensor}
+  - ${band_rotation}
+  - ${temporal_jitter}
+  - ${logspec}
+  - ${specaug}
+  val:
+  - ${to_tensor}
+  - ${logspec}
+  test: ${transforms.val}
+module:
+  _target_: emg2qwerty.lightning.CNNLSTMTransformerCTCModule
+  in_features: 528
+  mlp_features:
+  - 384
+  cnn_block_channels:
+  - 24
+  - 24
+  cnn_kernel_width: 32
+  lstm_hidden_size: 384
+  lstm_num_layers: 2
+  transformer_num_layers: 4
+  transformer_nhead: 8
+  transformer_dim_feedforward: 2048
+  dropout: 0.15
+datamodule:
+  _target_: emg2qwerty.lightning.WindowedEMGDataModule
+  window_length: 8000
+  padding:
+  - 1800
+  - 200
+trainer:
+  gradient_clip_val: 1.0
+  max_epochs: 150
+  accelerator: gpu
+  devices: 1
+  num_nodes: 1
+  default_root_dir: ${hydra:runtime.output_dir}
+callbacks:
+- _target_: pytorch_lightning.callbacks.LearningRateMonitor
+- _target_: pytorch_lightning.callbacks.ModelCheckpoint
+  dirpath: ${hydra:runtime.output_dir}/checkpoints
+  monitor: ${monitor_metric}
+  mode: ${monitor_mode}
+  save_last: true
+  verbose: true
+optimizer:
+  _target_: torch.optim.AdamW
+  lr: 0.0003
+  weight_decay: 0.01
+  betas:
+  - 0.9
+  - 0.98
+  eps: 1.0e-09
+lr_scheduler:
+  scheduler:
+    _target_: pl_bolts.optimizers.lr_scheduler.LinearWarmupCosineAnnealingLR
+    warmup_epochs: 20
+    max_epochs: ${trainer.max_epochs}
+    warmup_start_lr: 1.0e-07
+    eta_min: 1.0e-06
+  interval: epoch
+decoder:
+  _target_: emg2qwerty.decoder.CTCGreedyDecoder
+seed: 1501
+batch_size: 32
+num_workers: 4
+train: true
+checkpoint: null
+monitor_metric: val/CER
+monitor_mode: min
+
+Global seed set to 1501
+[2026-03-09 09:45:23,651][__main__][INFO] - Instantiating LightningModule {'_target_': 'emg2qwerty.lightning.CNNLSTMTransformerCTCModule', 'in_features': 528, 'mlp_features': [384], 'cnn_block_channels': [24, 24], 'cnn_kernel_width': 32, 'lstm_hidden_size': 384, 'lstm_num_layers': 2, 'transformer_num_layers': 4, 'transformer_nhead': 8, 'transformer_dim_feedforward': 2048, 'dropout': 0.15}
+/home/arjun/.local/lib/python3.10/site-packages/torch/nn/modules/transformer.py:306: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.self_attn.batch_first was not True(use batch_first for better inference performance)
+  warnings.warn(f"enable_nested_tensor is True, but self.use_nested_tensor is False because {why_not_sparsity_fast_path}")
+[2026-03-09 09:45:24,071][__main__][INFO] - Instantiating LightningDataModule {'_target_': 'emg2qwerty.lightning.WindowedEMGDataModule', 'window_length': 8000, 'padding': [1800, 200]}
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+IPU available: False, using: 0 IPUs
+HPU available: False, using: 0 HPUs
+Missing logger folder: /home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/lightning_logs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+/home/arjun/.local/lib/python3.10/site-packages/pl_bolts/__init__.py:11: FutureWarning: In the future `np.object` will be defined as the corresponding NumPy scalar.
+  if not hasattr(numpy, tp_name):
+/home/arjun/.local/lib/python3.10/site-packages/pl_bolts/__init__.py:11: FutureWarning: In the future `np.bool` will be defined as the corresponding NumPy scalar.
+  if not hasattr(numpy, tp_name):
+/home/arjun/.local/lib/python3.10/site-packages/pl_bolts/models/self_supervised/amdim/amdim_module.py:34: UnderReviewWarning: The feature generate_power_seq is currently marked under review. The compatibility with other Lightning projects is not guaranteed and API may change at any time. The API and functionality may change without warning in future releases. More details: https://lightning-bolts.readthedocs.io/en/latest/stability.html
+  "lr_options": generate_power_seq(LEARNING_RATE_CIFAR, 11),
+/home/arjun/.local/lib/python3.10/site-packages/pl_bolts/models/self_supervised/amdim/amdim_module.py:92: UnderReviewWarning: The feature FeatureMapContrastiveTask is currently marked under review. The compatibility with other Lightning projects is not guaranteed and API may change at any time. The API and functionality may change without warning in future releases. More details: https://lightning-bolts.readthedocs.io/en/latest/stability.html
+  contrastive_task: Union[FeatureMapContrastiveTask] = FeatureMapContrastiveTask("01, 02, 11"),
+/home/arjun/.local/lib/python3.10/site-packages/pl_bolts/losses/self_supervised_learning.py:228: UnderReviewWarning: The feature AmdimNCELoss is currently marked under review. The compatibility with other Lightning projects is not guaranteed and API may change at any time. The API and functionality may change without warning in future releases. More details: https://lightning-bolts.readthedocs.io/en/latest/stability.html
+  self.nce_loss = AmdimNCELoss(tclip)
+/home/arjun/.local/lib/python3.10/site-packages/hydra/_internal/instantiate/_instantiate2.py:92: UnderReviewWarning: The feature LinearWarmupCosineAnnealingLR is currently marked under review. The compatibility with other Lightning projects is not guaranteed and API may change at any time. The API and functionality may change without warning in future releases. More details: https://lightning-bolts.readthedocs.io/en/latest/stability.html
+  return _target_(*args, **kwargs)
+
+   | Name                | Type                          | Params
+-----------------------------------------------------------------------
+0  | spectrogram_norm    | SpectrogramNorm               | 64    
+1  | multiband_mlp       | MultiBandRotationInvariantMLP | 406 K 
+2  | cnn_encoder         | TDSConvEncoder                | 2.4 M 
+3  | lstm                | LSTM                          | 7.1 M 
+4  | lstm_proj           | Identity                      | 0     
+5  | lstm_norm           | LayerNorm                     | 1.5 K 
+6  | lstm_dropout        | Dropout                       | 0     
+7  | pos_encoding        | PositionalEncoding            | 0     
+8  | transformer_encoder | TransformerEncoder            | 22.1 M
+9  | output_proj         | Linear                        | 76.1 K
+10 | log_softmax         | LogSoftmax                    | 0     
+11 | ctc_loss            | CTCLoss                       | 0     
+12 | metrics             | ModuleDict                    | 0     
+-----------------------------------------------------------------------
+32.0 M    Trainable params
+0         Non-trainable params
+32.0 M    Total params
+128.148   Total estimated model params size (MB)
+Sanity Checking DataLoader 0:   0%|                       | 0/2 [00:00<?, ?it/s]/home/arjun/.local/lib/python3.10/site-packages/torch/nn/modules/conv.py:456: UserWarning: Plan failed with a cudnnException: CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at ../aten/src/ATen/native/cudnn/Conv_v8.cpp:919.)
+  return F.conv2d(input, weight, bias, self.stride,
+Epoch 0:  94%|████████████▎| 120/127 [03:28<00:12,  1.74s/it, loss=141, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 0:  95%|████████████▍| 121/127 [03:29<00:10,  1.73s/it, loss=141, v_num=0][A
+Epoch 0:  96%|████████████▍| 122/127 [03:30<00:08,  1.72s/it, loss=141, v_num=0][A
+Epoch 0:  97%|████████████▌| 123/127 [03:30<00:06,  1.71s/it, loss=141, v_num=0][A
+Epoch 0:  98%|████████████▋| 124/127 [03:31<00:05,  1.70s/it, loss=141, v_num=0][A
+Epoch 0:  98%|████████████▊| 125/127 [03:31<00:03,  1.69s/it, loss=141, v_num=0][A
+Epoch 0:  99%|████████████▉| 126/127 [03:32<00:01,  1.69s/it, loss=141, v_num=0][A
+Epoch 0: 100%|█████████████| 127/127 [03:32<00:00,  1.67s/it, loss=141, v_num=0][A
+Epoch 0: 100%|█████████████| 127/127 [03:32<00:00,  1.67s/it, loss=141, v_num=0]Epoch 0, global step 120: 'val/CER' reached 1079.39746 (best 1079.39746), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=0-step=120.ckpt' as top 1
+Epoch 1:  94%|███████████▎| 120/127 [03:25<00:11,  1.71s/it, loss=3.36, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 1:  95%|███████████▍| 121/127 [03:26<00:10,  1.71s/it, loss=3.36, v_num=0][A
+Epoch 1:  96%|███████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=3.36, v_num=0][A
+Epoch 1:  97%|███████████▌| 123/127 [03:27<00:06,  1.69s/it, loss=3.36, v_num=0][A
+Epoch 1:  98%|███████████▋| 124/127 [03:27<00:05,  1.68s/it, loss=3.36, v_num=0][A
+Epoch 1:  98%|███████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=3.36, v_num=0][A
+Epoch 1:  99%|███████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=3.36, v_num=0][A
+Epoch 1: 100%|████████████| 127/127 [03:29<00:00,  1.65s/it, loss=3.36, v_num=0][A
+Epoch 1: 100%|████████████| 127/127 [03:29<00:00,  1.65s/it, loss=3.36, v_num=0]Epoch 1, global step 240: 'val/CER' reached 100.00000 (best 100.00000), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=1-step=240.ckpt' as top 1
+Epoch 2:  94%|███████████▎| 120/127 [03:24<00:11,  1.71s/it, loss=3.16, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 2:  95%|███████████▍| 121/127 [03:26<00:10,  1.70s/it, loss=3.16, v_num=0][A
+Epoch 2:  96%|███████████▌| 122/127 [03:26<00:08,  1.69s/it, loss=3.16, v_num=0][A
+Epoch 2:  97%|███████████▌| 123/127 [03:27<00:06,  1.68s/it, loss=3.16, v_num=0][A
+Epoch 2:  98%|███████████▋| 124/127 [03:27<00:05,  1.67s/it, loss=3.16, v_num=0][A
+Epoch 2:  98%|███████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=3.16, v_num=0][A
+Epoch 2:  99%|███████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=3.16, v_num=0][A
+Epoch 2: 100%|████████████| 127/127 [03:29<00:00,  1.65s/it, loss=3.16, v_num=0][A
+Epoch 2: 100%|████████████| 127/127 [03:29<00:00,  1.65s/it, loss=3.16, v_num=0]Epoch 2, global step 360: 'val/CER' was not in top 1
+Epoch 3:  94%|███████████▎| 120/127 [03:24<00:11,  1.71s/it, loss=2.97, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 3:  95%|███████████▍| 121/127 [03:26<00:10,  1.70s/it, loss=2.97, v_num=0][A
+Epoch 3:  96%|███████████▌| 122/127 [03:26<00:08,  1.69s/it, loss=2.97, v_num=0][A
+Epoch 3:  97%|███████████▌| 123/127 [03:27<00:06,  1.69s/it, loss=2.97, v_num=0][A
+Epoch 3:  98%|███████████▋| 124/127 [03:27<00:05,  1.68s/it, loss=2.97, v_num=0][A
+Epoch 3:  98%|███████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=2.97, v_num=0][A
+Epoch 3:  99%|███████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=2.97, v_num=0][A
+Epoch 3: 100%|████████████| 127/127 [03:29<00:00,  1.65s/it, loss=2.97, v_num=0][A
+Epoch 3: 100%|████████████| 127/127 [03:29<00:00,  1.65s/it, loss=2.97, v_num=0]Epoch 3, global step 480: 'val/CER' was not in top 1
+Epoch 4:  94%|███████████▎| 120/127 [03:24<00:11,  1.71s/it, loss=2.75, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 4:  95%|███████████▍| 121/127 [03:26<00:10,  1.70s/it, loss=2.75, v_num=0][A
+Epoch 4:  96%|███████████▌| 122/127 [03:26<00:08,  1.69s/it, loss=2.75, v_num=0][A
+Epoch 4:  97%|███████████▌| 123/127 [03:27<00:06,  1.68s/it, loss=2.75, v_num=0][A
+Epoch 4:  98%|███████████▋| 124/127 [03:27<00:05,  1.67s/it, loss=2.75, v_num=0][A
+Epoch 4:  98%|███████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=2.75, v_num=0][A
+Epoch 4:  99%|███████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=2.75, v_num=0][A
+Epoch 4: 100%|████████████| 127/127 [03:29<00:00,  1.65s/it, loss=2.75, v_num=0][A
+Epoch 4: 100%|████████████| 127/127 [03:29<00:00,  1.65s/it, loss=2.75, v_num=0]Epoch 4, global step 600: 'val/CER' reached 99.73416 (best 99.73416), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=4-step=600.ckpt' as top 1
+Epoch 5:  94%|███████████▎| 120/127 [03:24<00:11,  1.71s/it, loss=2.44, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 5:  95%|███████████▍| 121/127 [03:26<00:10,  1.70s/it, loss=2.44, v_num=0][A
+Epoch 5:  96%|███████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=2.44, v_num=0][A
+Epoch 5:  97%|███████████▌| 123/127 [03:27<00:06,  1.69s/it, loss=2.44, v_num=0][A
+Epoch 5:  98%|███████████▋| 124/127 [03:27<00:05,  1.68s/it, loss=2.44, v_num=0][A
+Epoch 5:  98%|███████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=2.44, v_num=0][A
+Epoch 5:  99%|███████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=2.44, v_num=0][A
+Epoch 5: 100%|████████████| 127/127 [03:29<00:00,  1.65s/it, loss=2.44, v_num=0][A
+Epoch 5: 100%|████████████| 127/127 [03:29<00:00,  1.65s/it, loss=2.44, v_num=0]Epoch 5, global step 720: 'val/CER' reached 92.15773 (best 92.15773), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=5-step=720.ckpt' as top 1
+Epoch 6:  94%|███████████▎| 120/127 [03:24<00:11,  1.71s/it, loss=2.16, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 6:  95%|███████████▍| 121/127 [03:26<00:10,  1.70s/it, loss=2.16, v_num=0][A
+Epoch 6:  96%|███████████▌| 122/127 [03:26<00:08,  1.69s/it, loss=2.16, v_num=0][A
+Epoch 6:  97%|███████████▌| 123/127 [03:27<00:06,  1.69s/it, loss=2.16, v_num=0][A
+Epoch 6:  98%|███████████▋| 124/127 [03:27<00:05,  1.68s/it, loss=2.16, v_num=0][A
+Epoch 6:  98%|███████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=2.16, v_num=0][A
+Epoch 6:  99%|███████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=2.16, v_num=0][A
+Epoch 6: 100%|████████████| 127/127 [03:29<00:00,  1.65s/it, loss=2.16, v_num=0][A
+Epoch 6: 100%|████████████| 127/127 [03:29<00:00,  1.65s/it, loss=2.16, v_num=0][AEpoch 6, global step 840: 'val/CER' reached 88.56889 (best 88.56889), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=6-step=840.ckpt' as top 1
+Epoch 7:  94%|███████████▎| 120/127 [03:25<00:11,  1.71s/it, loss=1.97, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 7:  95%|███████████▍| 121/127 [03:26<00:10,  1.71s/it, loss=1.97, v_num=0][A
+Epoch 7:  96%|███████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=1.97, v_num=0][A
+Epoch 7:  97%|███████████▌| 123/127 [03:27<00:06,  1.69s/it, loss=1.97, v_num=0][A
+Epoch 7:  98%|███████████▋| 124/127 [03:28<00:05,  1.68s/it, loss=1.97, v_num=0][A
+Epoch 7:  98%|███████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=1.97, v_num=0][A
+Epoch 7:  99%|███████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=1.97, v_num=0][A
+Epoch 7: 100%|████████████| 127/127 [03:29<00:00,  1.65s/it, loss=1.97, v_num=0][A
+Epoch 7: 100%|████████████| 127/127 [03:29<00:00,  1.65s/it, loss=1.97, v_num=0]Epoch 7, global step 960: 'val/CER' reached 76.84980 (best 76.84980), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=7-step=960.ckpt' as top 1
+Epoch 8:  94%|███████████▎| 120/127 [03:24<00:11,  1.71s/it, loss=1.84, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 8:  95%|███████████▍| 121/127 [03:26<00:10,  1.70s/it, loss=1.84, v_num=0][A
+Epoch 8:  96%|███████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=1.84, v_num=0][A
+Epoch 8:  97%|███████████▌| 123/127 [03:27<00:06,  1.69s/it, loss=1.84, v_num=0][A
+Epoch 8:  98%|███████████▋| 124/127 [03:27<00:05,  1.68s/it, loss=1.84, v_num=0][A
+Epoch 8:  98%|███████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=1.84, v_num=0][A
+Epoch 8:  99%|███████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=1.84, v_num=0][A
+Epoch 8: 100%|████████████| 127/127 [03:29<00:00,  1.65s/it, loss=1.84, v_num=0][A
+Epoch 8: 100%|████████████| 127/127 [03:29<00:00,  1.65s/it, loss=1.84, v_num=0]Epoch 8, global step 1080: 'val/CER' reached 74.39079 (best 74.39079), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=8-step=1080.ckpt' as top 1
+Epoch 9:  94%|███████████▎| 120/127 [03:25<00:11,  1.71s/it, loss=1.73, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 9:  95%|███████████▍| 121/127 [03:26<00:10,  1.71s/it, loss=1.73, v_num=0][A
+Epoch 9:  96%|███████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=1.73, v_num=0][A
+Epoch 9:  97%|███████████▌| 123/127 [03:27<00:06,  1.69s/it, loss=1.73, v_num=0][A
+Epoch 9:  98%|███████████▋| 124/127 [03:28<00:05,  1.68s/it, loss=1.73, v_num=0][A
+Epoch 9:  98%|███████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=1.73, v_num=0][A
+Epoch 9:  99%|███████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=1.73, v_num=0][A
+Epoch 9: 100%|████████████| 127/127 [03:29<00:00,  1.65s/it, loss=1.73, v_num=0][A
+Epoch 9: 100%|████████████| 127/127 [03:29<00:00,  1.65s/it, loss=1.73, v_num=0]Epoch 9, global step 1200: 'val/CER' reached 61.65264 (best 61.65264), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=9-step=1200.ckpt' as top 1
+Epoch 10:  94%|██████████▍| 120/127 [03:24<00:11,  1.71s/it, loss=1.57, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 10:  95%|██████████▍| 121/127 [03:26<00:10,  1.70s/it, loss=1.57, v_num=0][A
+Epoch 10:  96%|██████████▌| 122/127 [03:26<00:08,  1.69s/it, loss=1.57, v_num=0][A
+Epoch 10:  97%|██████████▋| 123/127 [03:27<00:06,  1.68s/it, loss=1.57, v_num=0][A
+Epoch 10:  98%|██████████▋| 124/127 [03:27<00:05,  1.68s/it, loss=1.57, v_num=0][A
+Epoch 10:  98%|██████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=1.57, v_num=0][A
+Epoch 10:  99%|██████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=1.57, v_num=0][A
+Epoch 10: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=1.57, v_num=0][A
+Epoch 10: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=1.57, v_num=0]Epoch 10, global step 1320: 'val/CER' reached 53.30084 (best 53.30084), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=10-step=1320.ckpt' as top 1
+Epoch 11:  94%|██████████▍| 120/127 [03:24<00:11,  1.71s/it, loss=1.43, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 11:  95%|██████████▍| 121/127 [03:26<00:10,  1.70s/it, loss=1.43, v_num=0][A
+Epoch 11:  96%|██████████▌| 122/127 [03:26<00:08,  1.69s/it, loss=1.43, v_num=0][A
+Epoch 11:  97%|██████████▋| 123/127 [03:27<00:06,  1.68s/it, loss=1.43, v_num=0][A
+Epoch 11:  98%|██████████▋| 124/127 [03:27<00:05,  1.67s/it, loss=1.43, v_num=0][A
+Epoch 11:  98%|██████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=1.43, v_num=0][A
+Epoch 11:  99%|██████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=1.43, v_num=0][A
+Epoch 11: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=1.43, v_num=0][A
+Epoch 11: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=1.43, v_num=0]Epoch 11, global step 1440: 'val/CER' reached 46.01241 (best 46.01241), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=11-step=1440.ckpt' as top 1
+Epoch 12:  94%|██████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=1.31, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 12:  95%|██████████▍| 121/127 [03:26<00:10,  1.71s/it, loss=1.31, v_num=0][A
+Epoch 12:  96%|██████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=1.31, v_num=0][A
+Epoch 12:  97%|██████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=1.31, v_num=0][A
+Epoch 12:  98%|██████████▋| 124/127 [03:27<00:05,  1.68s/it, loss=1.31, v_num=0][A
+Epoch 12:  98%|██████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=1.31, v_num=0][A
+Epoch 12:  99%|██████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=1.31, v_num=0][A
+Epoch 12: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=1.31, v_num=0][A
+Epoch 12: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=1.31, v_num=0]Epoch 12, global step 1560: 'val/CER' reached 36.97386 (best 36.97386), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=12-step=1560.ckpt' as top 1
+Epoch 13:  94%|██████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=1.21, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 13:  95%|██████████▍| 121/127 [03:26<00:10,  1.71s/it, loss=1.21, v_num=0][A
+Epoch 13:  96%|██████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=1.21, v_num=0][A
+Epoch 13:  97%|██████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=1.21, v_num=0][A
+Epoch 13:  98%|██████████▋| 124/127 [03:27<00:05,  1.68s/it, loss=1.21, v_num=0][A
+Epoch 13:  98%|██████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=1.21, v_num=0][A
+Epoch 13:  99%|██████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=1.21, v_num=0][A
+Epoch 13: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=1.21, v_num=0][A
+Epoch 13: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=1.21, v_num=0]Epoch 13, global step 1680: 'val/CER' reached 34.58130 (best 34.58130), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=13-step=1680.ckpt' as top 1
+Epoch 14:  94%|██████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=1.15, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 14:  95%|██████████▍| 121/127 [03:26<00:10,  1.71s/it, loss=1.15, v_num=0][A
+Epoch 14:  96%|██████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=1.15, v_num=0][A
+Epoch 14:  97%|██████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=1.15, v_num=0][A
+Epoch 14:  98%|██████████▋| 124/127 [03:27<00:05,  1.68s/it, loss=1.15, v_num=0][A
+Epoch 14:  98%|██████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=1.15, v_num=0][A
+Epoch 14:  99%|██████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=1.15, v_num=0][A
+Epoch 14: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=1.15, v_num=0][A
+Epoch 14: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=1.15, v_num=0]Epoch 14, global step 1800: 'val/CER' reached 31.10324 (best 31.10324), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=14-step=1800.ckpt' as top 1
+Epoch 15:  94%|██████████▍| 120/127 [03:24<00:11,  1.71s/it, loss=1.11, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 15:  95%|██████████▍| 121/127 [03:26<00:10,  1.70s/it, loss=1.11, v_num=0][A
+Epoch 15:  96%|██████████▌| 122/127 [03:26<00:08,  1.69s/it, loss=1.11, v_num=0][A
+Epoch 15:  97%|██████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=1.11, v_num=0][A
+Epoch 15:  98%|██████████▋| 124/127 [03:27<00:05,  1.68s/it, loss=1.11, v_num=0][A
+Epoch 15:  98%|██████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=1.11, v_num=0][A
+Epoch 15:  99%|██████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=1.11, v_num=0][A
+Epoch 15: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=1.11, v_num=0][A
+Epoch 15: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=1.11, v_num=0]Epoch 15, global step 1920: 'val/CER' was not in top 1
+Epoch 16:  94%|██████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=1.05, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 16:  95%|██████████▍| 121/127 [03:26<00:10,  1.71s/it, loss=1.05, v_num=0][A
+Epoch 16:  96%|██████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=1.05, v_num=0][A
+Epoch 16:  97%|██████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=1.05, v_num=0][A
+Epoch 16:  98%|██████████▋| 124/127 [03:27<00:05,  1.68s/it, loss=1.05, v_num=0][A
+Epoch 16:  98%|██████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=1.05, v_num=0][A
+Epoch 16:  99%|██████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=1.05, v_num=0][A
+Epoch 16: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=1.05, v_num=0][A
+Epoch 16: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=1.05, v_num=0]Epoch 16, global step 2040: 'val/CER' reached 30.15064 (best 30.15064), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=16-step=2040.ckpt' as top 1
+Epoch 17:  94%|██████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=1.01, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 17:  95%|██████████▍| 121/127 [03:26<00:10,  1.71s/it, loss=1.01, v_num=0][A
+Epoch 17:  96%|██████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=1.01, v_num=0][A
+Epoch 17:  97%|██████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=1.01, v_num=0][A
+Epoch 17:  98%|██████████▋| 124/127 [03:28<00:05,  1.68s/it, loss=1.01, v_num=0][A
+Epoch 17:  98%|██████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=1.01, v_num=0][A
+Epoch 17:  99%|██████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=1.01, v_num=0][A
+Epoch 17: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=1.01, v_num=0][A
+Epoch 17: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=1.01, v_num=0]Epoch 17, global step 2160: 'val/CER' reached 26.91626 (best 26.91626), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=17-step=2160.ckpt' as top 1
+Epoch 18:  94%|██████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=1.05, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 18:  95%|██████████▍| 121/127 [03:26<00:10,  1.71s/it, loss=1.05, v_num=0][A
+Epoch 18:  96%|██████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=1.05, v_num=0][A
+Epoch 18:  97%|██████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=1.05, v_num=0][A
+Epoch 18:  98%|██████████▋| 124/127 [03:28<00:05,  1.68s/it, loss=1.05, v_num=0][A
+Epoch 18:  98%|██████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=1.05, v_num=0][A
+Epoch 18:  99%|██████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=1.05, v_num=0][A
+Epoch 18: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=1.05, v_num=0][A
+Epoch 18: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=1.05, v_num=0]Epoch 18, global step 2280: 'val/CER' was not in top 1
+Epoch 19:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.956, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 19:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.956, v_num=0][A
+Epoch 19:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.956, v_num=0][A
+Epoch 19:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.956, v_num=0][A
+Epoch 19:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.956, v_num=0][A
+Epoch 19:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.956, v_num=0][A
+Epoch 19:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.956, v_num=0][A
+Epoch 19: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.956, v_num=0][A
+Epoch 19: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.956, v_num=0]Epoch 19, global step 2400: 'val/CER' reached 25.94151 (best 25.94151), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=19-step=2400.ckpt' as top 1
+Epoch 20:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.927, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 20:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.927, v_num=0][A
+Epoch 20:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.927, v_num=0][A
+Epoch 20:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.927, v_num=0][A
+Epoch 20:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.927, v_num=0][A
+Epoch 20:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.927, v_num=0][A
+Epoch 20:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.927, v_num=0][A
+Epoch 20: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.927, v_num=0][A
+Epoch 20: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.927, v_num=0]Epoch 20, global step 2520: 'val/CER' was not in top 1
+Epoch 21:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.876, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 21:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.876, v_num=0][A
+Epoch 21:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.876, v_num=0][A
+Epoch 21:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.876, v_num=0][A
+Epoch 21:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.876, v_num=0][A
+Epoch 21:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.876, v_num=0][A
+Epoch 21:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.876, v_num=0][A
+Epoch 21: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.876, v_num=0][A
+Epoch 21: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.876, v_num=0]Epoch 21, global step 2640: 'val/CER' reached 23.88126 (best 23.88126), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=21-step=2640.ckpt' as top 1
+Epoch 22:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.875, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 22:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.875, v_num=0][A
+Epoch 22:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.875, v_num=0][A
+Epoch 22:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.875, v_num=0][A
+Epoch 22:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.875, v_num=0][A
+Epoch 22:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.875, v_num=0][A
+Epoch 22:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.875, v_num=0][A
+Epoch 22: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.875, v_num=0][A
+Epoch 22: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.875, v_num=0]Epoch 22, global step 2760: 'val/CER' reached 23.32743 (best 23.32743), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=22-step=2760.ckpt' as top 1
+Epoch 23:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.848, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 23:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.848, v_num=0][A
+Epoch 23:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.848, v_num=0][A
+Epoch 23:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.848, v_num=0][A
+Epoch 23:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.848, v_num=0][A
+Epoch 23:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.848, v_num=0][A
+Epoch 23:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.848, v_num=0][A
+Epoch 23: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.848, v_num=0][A
+Epoch 23: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.848, v_num=0]Epoch 23, global step 2880: 'val/CER' was not in top 1
+Epoch 24:  94%|██████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.85, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 24:  95%|██████████▍| 121/127 [03:26<00:10,  1.71s/it, loss=0.85, v_num=0][A
+Epoch 24:  96%|██████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.85, v_num=0][A
+Epoch 24:  97%|██████████▋| 123/127 [03:28<00:06,  1.69s/it, loss=0.85, v_num=0][A
+Epoch 24:  98%|██████████▋| 124/127 [03:28<00:05,  1.68s/it, loss=0.85, v_num=0][A
+Epoch 24:  98%|██████████▊| 125/127 [03:29<00:03,  1.67s/it, loss=0.85, v_num=0][A
+Epoch 24:  99%|██████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.85, v_num=0][A
+Epoch 24: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.85, v_num=0][A
+Epoch 24: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.85, v_num=0]Epoch 24, global step 3000: 'val/CER' was not in top 1
+Epoch 25:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.828, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 25:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.828, v_num=0][A
+Epoch 25:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.828, v_num=0][A
+Epoch 25:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.828, v_num=0][A
+Epoch 25:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.828, v_num=0][A
+Epoch 25:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.828, v_num=0][A
+Epoch 25:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.828, v_num=0][A
+Epoch 25: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.828, v_num=0][A
+Epoch 25: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.828, v_num=0]Epoch 25, global step 3120: 'val/CER' reached 23.19451 (best 23.19451), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=25-step=3120.ckpt' as top 1
+Epoch 26:  94%|█████████▍| 120/127 [03:24<00:11,  1.71s/it, loss=0.772, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 26:  95%|█████████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.772, v_num=0][A
+Epoch 26:  96%|█████████▌| 122/127 [03:26<00:08,  1.69s/it, loss=0.772, v_num=0][A
+Epoch 26:  97%|█████████▋| 123/127 [03:27<00:06,  1.68s/it, loss=0.772, v_num=0][A
+Epoch 26:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.772, v_num=0][A
+Epoch 26:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.772, v_num=0][A
+Epoch 26:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.772, v_num=0][A
+Epoch 26: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.772, v_num=0][A
+Epoch 26: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.772, v_num=0]Epoch 26, global step 3240: 'val/CER' reached 21.64377 (best 21.64377), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=26-step=3240.ckpt' as top 1
+Epoch 27:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.767, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 27:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.767, v_num=0][A
+Epoch 27:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.767, v_num=0][A
+Epoch 27:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.767, v_num=0][A
+Epoch 27:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.767, v_num=0][A
+Epoch 27:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.767, v_num=0][A
+Epoch 27:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.767, v_num=0][A
+Epoch 27: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.767, v_num=0][A
+Epoch 27: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.767, v_num=0]Epoch 27, global step 3360: 'val/CER' was not in top 1
+Epoch 28:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.794, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 28:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.794, v_num=0][A
+Epoch 28:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.794, v_num=0][A
+Epoch 28:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.794, v_num=0][A
+Epoch 28:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.794, v_num=0][A
+Epoch 28:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.794, v_num=0][A
+Epoch 28:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.794, v_num=0][A
+Epoch 28: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.794, v_num=0][A
+Epoch 28: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.794, v_num=0]Epoch 28, global step 3480: 'val/CER' was not in top 1
+Epoch 29:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.792, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 29:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.792, v_num=0][A
+Epoch 29:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.792, v_num=0][A
+Epoch 29:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.792, v_num=0][A
+Epoch 29:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.792, v_num=0][A
+Epoch 29:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.792, v_num=0][A
+Epoch 29:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.792, v_num=0][A
+Epoch 29: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.792, v_num=0][A
+Epoch 29: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.792, v_num=0]Epoch 29, global step 3600: 'val/CER' was not in top 1
+Epoch 30:  94%|█████████▍| 120/127 [03:24<00:11,  1.71s/it, loss=0.726, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 30:  95%|█████████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.726, v_num=0][A
+Epoch 30:  96%|█████████▌| 122/127 [03:26<00:08,  1.69s/it, loss=0.726, v_num=0][A
+Epoch 30:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.726, v_num=0][A
+Epoch 30:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.726, v_num=0][A
+Epoch 30:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.726, v_num=0][A
+Epoch 30:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.726, v_num=0][A
+Epoch 30: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.726, v_num=0][A
+Epoch 30: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.726, v_num=0]Epoch 30, global step 3720: 'val/CER' reached 21.44440 (best 21.44440), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=30-step=3720.ckpt' as top 1
+Epoch 31:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.751, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 31:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.751, v_num=0][A
+Epoch 31:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.751, v_num=0][A
+Epoch 31:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.751, v_num=0][A
+Epoch 31:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.751, v_num=0][A
+Epoch 31:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.751, v_num=0][A
+Epoch 31:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.751, v_num=0][A
+Epoch 31: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.751, v_num=0][A
+Epoch 31: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.751, v_num=0]Epoch 31, global step 3840: 'val/CER' was not in top 1
+Epoch 32:  94%|██████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.76, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 32:  95%|██████████▍| 121/127 [03:26<00:10,  1.71s/it, loss=0.76, v_num=0][A
+Epoch 32:  96%|██████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.76, v_num=0][A
+Epoch 32:  97%|██████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.76, v_num=0][A
+Epoch 32:  98%|██████████▋| 124/127 [03:28<00:05,  1.68s/it, loss=0.76, v_num=0][A
+Epoch 32:  98%|██████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.76, v_num=0][A
+Epoch 32:  99%|██████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.76, v_num=0][A
+Epoch 32: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.76, v_num=0][A
+Epoch 32: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.76, v_num=0]Epoch 32, global step 3960: 'val/CER' was not in top 1
+Epoch 33:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.721, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 33:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.721, v_num=0][A
+Epoch 33:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.721, v_num=0][A
+Epoch 33:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.721, v_num=0][A
+Epoch 33:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.721, v_num=0][A
+Epoch 33:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.721, v_num=0][A
+Epoch 33:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.721, v_num=0][A
+Epoch 33: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.721, v_num=0][A
+Epoch 33: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.721, v_num=0]Epoch 33, global step 4080: 'val/CER' was not in top 1
+Epoch 34:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.707, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 34:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.707, v_num=0][A
+Epoch 34:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.707, v_num=0][A
+Epoch 34:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.707, v_num=0][A
+Epoch 34:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.707, v_num=0][A
+Epoch 34:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.707, v_num=0][A
+Epoch 34:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.707, v_num=0][A
+Epoch 34: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.707, v_num=0][A
+Epoch 34: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.707, v_num=0]Epoch 34, global step 4200: 'val/CER' reached 20.33673 (best 20.33673), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=34-step=4200.ckpt' as top 1
+Epoch 35:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.708, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 35:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.708, v_num=0][A
+Epoch 35:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.708, v_num=0][A
+Epoch 35:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.708, v_num=0][A
+Epoch 35:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.708, v_num=0][A
+Epoch 35:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.708, v_num=0][A
+Epoch 35:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.708, v_num=0][A
+Epoch 35: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.708, v_num=0][A
+Epoch 35: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.708, v_num=0]Epoch 35, global step 4320: 'val/CER' was not in top 1
+Epoch 36:  94%|██████████▍| 120/127 [03:24<00:11,  1.71s/it, loss=0.74, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 36:  95%|██████████▍| 121/127 [03:26<00:10,  1.70s/it, loss=0.74, v_num=0][A
+Epoch 36:  96%|██████████▌| 122/127 [03:26<00:08,  1.69s/it, loss=0.74, v_num=0][A
+Epoch 36:  97%|██████████▋| 123/127 [03:27<00:06,  1.68s/it, loss=0.74, v_num=0][A
+Epoch 36:  98%|██████████▋| 124/127 [03:27<00:05,  1.67s/it, loss=0.74, v_num=0][A
+Epoch 36:  98%|██████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.74, v_num=0][A
+Epoch 36:  99%|██████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.74, v_num=0][A
+Epoch 36: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.74, v_num=0][A
+Epoch 36: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.74, v_num=0]Epoch 36, global step 4440: 'val/CER' was not in top 1
+Epoch 37:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.685, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 37:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.685, v_num=0][A
+Epoch 37:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.685, v_num=0][A
+Epoch 37:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.685, v_num=0][A
+Epoch 37:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.685, v_num=0][A
+Epoch 37:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.685, v_num=0][A
+Epoch 37:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.685, v_num=0][A
+Epoch 37: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.685, v_num=0][A
+Epoch 37: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.685, v_num=0]Epoch 37, global step 4560: 'val/CER' was not in top 1
+Epoch 38:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.673, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 38:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.673, v_num=0][A
+Epoch 38:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.673, v_num=0][A
+Epoch 38:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.673, v_num=0][A
+Epoch 38:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.673, v_num=0][A
+Epoch 38:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.673, v_num=0][A
+Epoch 38:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.673, v_num=0][A
+Epoch 38: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.673, v_num=0][A
+Epoch 38: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.673, v_num=0]Epoch 38, global step 4680: 'val/CER' was not in top 1
+Epoch 39:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.632, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 39:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.632, v_num=0][A
+Epoch 39:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.632, v_num=0][A
+Epoch 39:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.632, v_num=0][A
+Epoch 39:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.632, v_num=0][A
+Epoch 39:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.632, v_num=0][A
+Epoch 39:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.632, v_num=0][A
+Epoch 39: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.632, v_num=0][A
+Epoch 39: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.632, v_num=0]Epoch 39, global step 4800: 'val/CER' reached 19.69428 (best 19.69428), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=39-step=4800.ckpt' as top 1
+Epoch 40:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.584, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 40:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.584, v_num=0][A
+Epoch 40:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.584, v_num=0][A
+Epoch 40:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.584, v_num=0][A
+Epoch 40:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.584, v_num=0][A
+Epoch 40:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.584, v_num=0][A
+Epoch 40:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.584, v_num=0][A
+Epoch 40: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.584, v_num=0][A
+Epoch 40: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.584, v_num=0]Epoch 40, global step 4920: 'val/CER' reached 18.71954 (best 18.71954), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=40-step=4920.ckpt' as top 1
+Epoch 41:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.605, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 41:  95%|█████████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.605, v_num=0][A
+Epoch 41:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.605, v_num=0][A
+Epoch 41:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.605, v_num=0][A
+Epoch 41:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.605, v_num=0][A
+Epoch 41:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.605, v_num=0][A
+Epoch 41:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.605, v_num=0][A
+Epoch 41: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.605, v_num=0][A
+Epoch 41: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.605, v_num=0]Epoch 41, global step 5040: 'val/CER' was not in top 1
+Epoch 42:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.565, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 42:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.565, v_num=0][A
+Epoch 42:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.565, v_num=0][A
+Epoch 42:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.565, v_num=0][A
+Epoch 42:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.565, v_num=0][A
+Epoch 42:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.565, v_num=0][A
+Epoch 42:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.565, v_num=0][A
+Epoch 42: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.565, v_num=0][A
+Epoch 42: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.565, v_num=0]Epoch 42, global step 5160: 'val/CER' was not in top 1
+Epoch 43:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.535, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 43:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.535, v_num=0][A
+Epoch 43:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.535, v_num=0][A
+Epoch 43:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.535, v_num=0][A
+Epoch 43:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.535, v_num=0][A
+Epoch 43:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.535, v_num=0][A
+Epoch 43:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.535, v_num=0][A
+Epoch 43: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.535, v_num=0][A
+Epoch 43: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.535, v_num=0][AEpoch 43, global step 5280: 'val/CER' reached 17.52326 (best 17.52326), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=43-step=5280.ckpt' as top 1
+Epoch 44:  94%|█████████▍| 120/127 [03:24<00:11,  1.71s/it, loss=0.533, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 44:  95%|█████████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.533, v_num=0][A
+Epoch 44:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.533, v_num=0][A
+Epoch 44:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.533, v_num=0][A
+Epoch 44:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.533, v_num=0][A
+Epoch 44:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.533, v_num=0][A
+Epoch 44:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.533, v_num=0][A
+Epoch 44: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.533, v_num=0][A
+Epoch 44: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.533, v_num=0]Epoch 44, global step 5400: 'val/CER' was not in top 1
+Epoch 45:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.527, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 45:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.527, v_num=0][A
+Epoch 45:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.527, v_num=0][A
+Epoch 45:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.527, v_num=0][A
+Epoch 45:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.527, v_num=0][A
+Epoch 45:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.527, v_num=0][A
+Epoch 45:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.527, v_num=0][A
+Epoch 45: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.527, v_num=0][A
+Epoch 45: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.527, v_num=0]Epoch 45, global step 5520: 'val/CER' was not in top 1
+Epoch 46:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.534, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 46:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.534, v_num=0][A
+Epoch 46:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.534, v_num=0][A
+Epoch 46:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.534, v_num=0][A
+Epoch 46:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.534, v_num=0][A
+Epoch 46:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.534, v_num=0][A
+Epoch 46:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.534, v_num=0][A
+Epoch 46: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.534, v_num=0][A
+Epoch 46: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.534, v_num=0]Epoch 46, global step 5640: 'val/CER' was not in top 1
+Epoch 47:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.484, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 47:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.484, v_num=0][A
+Epoch 47:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.484, v_num=0][A
+Epoch 47:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.484, v_num=0][A
+Epoch 47:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.484, v_num=0][A
+Epoch 47:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.484, v_num=0][A
+Epoch 47:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.484, v_num=0][A
+Epoch 47: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.484, v_num=0][A
+Epoch 47: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.484, v_num=0]Epoch 47, global step 5760: 'val/CER' was not in top 1
+Epoch 48:  94%|█████████▍| 120/127 [03:24<00:11,  1.71s/it, loss=0.488, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 48:  95%|█████████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.488, v_num=0][A
+Epoch 48:  96%|█████████▌| 122/127 [03:26<00:08,  1.69s/it, loss=0.488, v_num=0][A
+Epoch 48:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.488, v_num=0][A
+Epoch 48:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.488, v_num=0][A
+Epoch 48:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.488, v_num=0][A
+Epoch 48:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.488, v_num=0][A
+Epoch 48: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.488, v_num=0][A
+Epoch 48: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.488, v_num=0]Epoch 48, global step 5880: 'val/CER' was not in top 1
+Epoch 49:  94%|█████████▍| 120/127 [03:24<00:11,  1.71s/it, loss=0.488, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 49:  95%|█████████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.488, v_num=0][A
+Epoch 49:  96%|█████████▌| 122/127 [03:26<00:08,  1.69s/it, loss=0.488, v_num=0][A
+Epoch 49:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.488, v_num=0][A
+Epoch 49:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.488, v_num=0][A
+Epoch 49:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.488, v_num=0][A
+Epoch 49:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.488, v_num=0][A
+Epoch 49: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.488, v_num=0][A
+Epoch 49: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.488, v_num=0]Epoch 49, global step 6000: 'val/CER' reached 17.16881 (best 17.16881), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=49-step=6000.ckpt' as top 1
+Epoch 50:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.455, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 50:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.455, v_num=0][A
+Epoch 50:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.455, v_num=0][A
+Epoch 50:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.455, v_num=0][A
+Epoch 50:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.455, v_num=0][A
+Epoch 50:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.455, v_num=0][A
+Epoch 50:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.455, v_num=0][A
+Epoch 50: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.455, v_num=0][A
+Epoch 50: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.455, v_num=0]Epoch 50, global step 6120: 'val/CER' reached 16.57067 (best 16.57067), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=50-step=6120.ckpt' as top 1
+Epoch 51:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.456, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 51:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.456, v_num=0][A
+Epoch 51:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.456, v_num=0][A
+Epoch 51:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.456, v_num=0][A
+Epoch 51:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.456, v_num=0][A
+Epoch 51:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.456, v_num=0][A
+Epoch 51:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.456, v_num=0][A
+Epoch 51: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.456, v_num=0][A
+Epoch 51: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.456, v_num=0]Epoch 51, global step 6240: 'val/CER' was not in top 1
+Epoch 52:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.451, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 52:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.451, v_num=0][A
+Epoch 52:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.451, v_num=0][A
+Epoch 52:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.451, v_num=0][A
+Epoch 52:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.451, v_num=0][A
+Epoch 52:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.451, v_num=0][A
+Epoch 52:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.451, v_num=0][A
+Epoch 52: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.451, v_num=0][A
+Epoch 52: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.451, v_num=0]Epoch 52, global step 6360: 'val/CER' reached 16.26052 (best 16.26052), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=52-step=6360.ckpt' as top 1
+Epoch 53:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.445, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 53:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.445, v_num=0][A
+Epoch 53:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.445, v_num=0][A
+Epoch 53:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.445, v_num=0][A
+Epoch 53:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.445, v_num=0][A
+Epoch 53:  98%|█████████▊| 125/127 [03:29<00:03,  1.67s/it, loss=0.445, v_num=0][A
+Epoch 53:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.445, v_num=0][A
+Epoch 53: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.445, v_num=0][A
+Epoch 53: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.445, v_num=0]Epoch 53, global step 6480: 'val/CER' was not in top 1
+Epoch 54:  94%|█████████▍| 120/127 [03:24<00:11,  1.71s/it, loss=0.424, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 54:  95%|█████████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.424, v_num=0][A
+Epoch 54:  96%|█████████▌| 122/127 [03:26<00:08,  1.69s/it, loss=0.424, v_num=0][A
+Epoch 54:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.424, v_num=0][A
+Epoch 54:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.424, v_num=0][A
+Epoch 54:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.424, v_num=0][A
+Epoch 54:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.424, v_num=0][A
+Epoch 54: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.424, v_num=0][A
+Epoch 54: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.424, v_num=0]Epoch 54, global step 6600: 'val/CER' reached 15.75100 (best 15.75100), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=54-step=6600.ckpt' as top 1
+Epoch 55:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.413, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 55:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.413, v_num=0][A
+Epoch 55:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.413, v_num=0][A
+Epoch 55:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.413, v_num=0][A
+Epoch 55:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.413, v_num=0][A
+Epoch 55:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.413, v_num=0][A
+Epoch 55:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.413, v_num=0][A
+Epoch 55: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.413, v_num=0][A
+Epoch 55: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.413, v_num=0][AEpoch 55, global step 6720: 'val/CER' reached 15.46300 (best 15.46300), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=55-step=6720.ckpt' as top 1
+Epoch 56:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.388, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 56:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.388, v_num=0][A
+Epoch 56:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.388, v_num=0][A
+Epoch 56:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.388, v_num=0][A
+Epoch 56:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.388, v_num=0][A
+Epoch 56:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.388, v_num=0][A
+Epoch 56:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.388, v_num=0][A
+Epoch 56: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.388, v_num=0][A
+Epoch 56: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.388, v_num=0]Epoch 56, global step 6840: 'val/CER' was not in top 1
+Epoch 57:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.427, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 57:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.427, v_num=0][A
+Epoch 57:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.427, v_num=0][A
+Epoch 57:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.427, v_num=0][A
+Epoch 57:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.427, v_num=0][A
+Epoch 57:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.427, v_num=0][A
+Epoch 57:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.427, v_num=0][A
+Epoch 57: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.427, v_num=0][A
+Epoch 57: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.427, v_num=0]Epoch 57, global step 6960: 'val/CER' was not in top 1
+Epoch 58:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.401, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 58:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.401, v_num=0][A
+Epoch 58:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.401, v_num=0][A
+Epoch 58:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.401, v_num=0][A
+Epoch 58:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.401, v_num=0][A
+Epoch 58:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.401, v_num=0][A
+Epoch 58:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.401, v_num=0][A
+Epoch 58: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.401, v_num=0][A
+Epoch 58: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.401, v_num=0]Epoch 58, global step 7080: 'val/CER' was not in top 1
+Epoch 59:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.343, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 59:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.343, v_num=0][A
+Epoch 59:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.343, v_num=0][A
+Epoch 59:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.343, v_num=0][A
+Epoch 59:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.343, v_num=0][A
+Epoch 59:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.343, v_num=0][A
+Epoch 59:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.343, v_num=0][A
+Epoch 59: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.343, v_num=0][A
+Epoch 59: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.343, v_num=0][AEpoch 59, global step 7200: 'val/CER' reached 15.17501 (best 15.17501), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=59-step=7200.ckpt' as top 1
+Epoch 60:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.356, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 60:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.356, v_num=0][A
+Epoch 60:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.356, v_num=0][A
+Epoch 60:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.356, v_num=0][A
+Epoch 60:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.356, v_num=0][A
+Epoch 60:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.356, v_num=0][A
+Epoch 60:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.356, v_num=0][A
+Epoch 60: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.356, v_num=0][A
+Epoch 60: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.356, v_num=0]Epoch 60, global step 7320: 'val/CER' was not in top 1
+Epoch 61:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.373, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 61:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.373, v_num=0][A
+Epoch 61:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.373, v_num=0][A
+Epoch 61:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.373, v_num=0][A
+Epoch 61:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.373, v_num=0][A
+Epoch 61:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.373, v_num=0][A
+Epoch 61:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.373, v_num=0][A
+Epoch 61: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.373, v_num=0][A
+Epoch 61: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.373, v_num=0]Epoch 61, global step 7440: 'val/CER' was not in top 1
+Epoch 62:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.339, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 62:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.339, v_num=0][A
+Epoch 62:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.339, v_num=0][A
+Epoch 62:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.339, v_num=0][A
+Epoch 62:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.339, v_num=0][A
+Epoch 62:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.339, v_num=0][A
+Epoch 62:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.339, v_num=0][A
+Epoch 62: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.339, v_num=0][A
+Epoch 62: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.339, v_num=0]Epoch 62, global step 7560: 'val/CER' was not in top 1
+Epoch 63:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.367, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 63:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.367, v_num=0][A
+Epoch 63:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.367, v_num=0][A
+Epoch 63:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.367, v_num=0][A
+Epoch 63:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.367, v_num=0][A
+Epoch 63:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.367, v_num=0][A
+Epoch 63:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.367, v_num=0][A
+Epoch 63: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.367, v_num=0][A
+Epoch 63: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.367, v_num=0]Epoch 63, global step 7680: 'val/CER' was not in top 1
+Epoch 64:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.327, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 64:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.327, v_num=0][A
+Epoch 64:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.327, v_num=0][A
+Epoch 64:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.327, v_num=0][A
+Epoch 64:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.327, v_num=0][A
+Epoch 64:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.327, v_num=0][A
+Epoch 64:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.327, v_num=0][A
+Epoch 64: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.327, v_num=0][A
+Epoch 64: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.327, v_num=0]Epoch 64, global step 7800: 'val/CER' was not in top 1
+Epoch 65:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.315, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 65:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.315, v_num=0][A
+Epoch 65:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.315, v_num=0][A
+Epoch 65:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.315, v_num=0][A
+Epoch 65:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.315, v_num=0][A
+Epoch 65:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.315, v_num=0][A
+Epoch 65:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.315, v_num=0][A
+Epoch 65: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.315, v_num=0][A
+Epoch 65: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.315, v_num=0]Epoch 65, global step 7920: 'val/CER' was not in top 1
+Epoch 66:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.317, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 66:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.317, v_num=0][A
+Epoch 66:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.317, v_num=0][A
+Epoch 66:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.317, v_num=0][A
+Epoch 66:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.317, v_num=0][A
+Epoch 66:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.317, v_num=0][A
+Epoch 66:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.317, v_num=0][A
+Epoch 66: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.317, v_num=0][A
+Epoch 66: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.317, v_num=0]Epoch 66, global step 8040: 'val/CER' was not in top 1
+Epoch 67:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.284, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 67:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.284, v_num=0][A
+Epoch 67:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.284, v_num=0][A
+Epoch 67:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.284, v_num=0][A
+Epoch 67:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.284, v_num=0][A
+Epoch 67:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.284, v_num=0][A
+Epoch 67:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.284, v_num=0][A
+Epoch 67: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.284, v_num=0][A
+Epoch 67: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.284, v_num=0]Epoch 67, global step 8160: 'val/CER' reached 14.97563 (best 14.97563), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=67-step=8160.ckpt' as top 1
+Epoch 68:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.281, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 68:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.281, v_num=0][A
+Epoch 68:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.281, v_num=0][A
+Epoch 68:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.281, v_num=0][A
+Epoch 68:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.281, v_num=0][A
+Epoch 68:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.281, v_num=0][A
+Epoch 68:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.281, v_num=0][A
+Epoch 68: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.281, v_num=0][A
+Epoch 68: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.281, v_num=0]Epoch 68, global step 8280: 'val/CER' reached 14.79840 (best 14.79840), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=68-step=8280.ckpt' as top 1
+Epoch 69:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.295, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 69:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.295, v_num=0][A
+Epoch 69:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.295, v_num=0][A
+Epoch 69:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.295, v_num=0][A
+Epoch 69:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.295, v_num=0][A
+Epoch 69:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.295, v_num=0][A
+Epoch 69:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.295, v_num=0][A
+Epoch 69: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.295, v_num=0][A
+Epoch 69: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.295, v_num=0]Epoch 69, global step 8400: 'val/CER' reached 14.08950 (best 14.08950), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=69-step=8400.ckpt' as top 1
+Epoch 70:  94%|█████████▍| 120/127 [03:24<00:11,  1.71s/it, loss=0.267, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 70:  95%|█████████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.267, v_num=0][A
+Epoch 70:  96%|█████████▌| 122/127 [03:26<00:08,  1.69s/it, loss=0.267, v_num=0][A
+Epoch 70:  97%|█████████▋| 123/127 [03:27<00:06,  1.68s/it, loss=0.267, v_num=0][A
+Epoch 70:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.267, v_num=0][A
+Epoch 70:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.267, v_num=0][A
+Epoch 70:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.267, v_num=0][A
+Epoch 70: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.267, v_num=0][A
+Epoch 70: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.267, v_num=0]Epoch 70, global step 8520: 'val/CER' was not in top 1
+Epoch 71:  94%|█████████▍| 120/127 [03:24<00:11,  1.71s/it, loss=0.273, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 71:  95%|█████████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.273, v_num=0][A
+Epoch 71:  96%|█████████▌| 122/127 [03:26<00:08,  1.69s/it, loss=0.273, v_num=0][A
+Epoch 71:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.273, v_num=0][A
+Epoch 71:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.273, v_num=0][A
+Epoch 71:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.273, v_num=0][A
+Epoch 71:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.273, v_num=0][A
+Epoch 71: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.273, v_num=0][A
+Epoch 71: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.273, v_num=0]Epoch 71, global step 8640: 'val/CER' was not in top 1
+Epoch 72:  94%|█████████▍| 120/127 [03:24<00:11,  1.71s/it, loss=0.236, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 72:  95%|█████████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.236, v_num=0][A
+Epoch 72:  96%|█████████▌| 122/127 [03:26<00:08,  1.69s/it, loss=0.236, v_num=0][A
+Epoch 72:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.236, v_num=0][A
+Epoch 72:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.236, v_num=0][A
+Epoch 72:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.236, v_num=0][A
+Epoch 72:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.236, v_num=0][A
+Epoch 72: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.236, v_num=0][A
+Epoch 72: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.236, v_num=0]Epoch 72, global step 8760: 'val/CER' reached 13.95658 (best 13.95658), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=72-step=8760.ckpt' as top 1
+Epoch 73:  94%|█████████▍| 120/127 [03:24<00:11,  1.71s/it, loss=0.247, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 73:  95%|█████████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.247, v_num=0][A
+Epoch 73:  96%|█████████▌| 122/127 [03:26<00:08,  1.69s/it, loss=0.247, v_num=0][A
+Epoch 73:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.247, v_num=0][A
+Epoch 73:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.247, v_num=0][A
+Epoch 73:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.247, v_num=0][A
+Epoch 73:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.247, v_num=0][A
+Epoch 73: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.247, v_num=0][A
+Epoch 73: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.247, v_num=0]Epoch 73, global step 8880: 'val/CER' was not in top 1
+Epoch 74:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.231, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 74:  95%|█████████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.231, v_num=0][A
+Epoch 74:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.231, v_num=0][A
+Epoch 74:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.231, v_num=0][A
+Epoch 74:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.231, v_num=0][A
+Epoch 74:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.231, v_num=0][A
+Epoch 74:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.231, v_num=0][A
+Epoch 74: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.231, v_num=0][A
+Epoch 74: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.231, v_num=0]Epoch 74, global step 9000: 'val/CER' was not in top 1
+Epoch 75:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.219, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 75:  95%|█████████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.219, v_num=0][A
+Epoch 75:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.219, v_num=0][A
+Epoch 75:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.219, v_num=0][A
+Epoch 75:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.219, v_num=0][A
+Epoch 75:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.219, v_num=0][A
+Epoch 75:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.219, v_num=0][A
+Epoch 75: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.219, v_num=0][A
+Epoch 75: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.219, v_num=0]Epoch 75, global step 9120: 'val/CER' reached 13.49136 (best 13.49136), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=75-step=9120.ckpt' as top 1
+Epoch 76:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.214, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 76:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.214, v_num=0][A
+Epoch 76:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.214, v_num=0][A
+Epoch 76:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.214, v_num=0][A
+Epoch 76:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.214, v_num=0][A
+Epoch 76:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.214, v_num=0][A
+Epoch 76:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.214, v_num=0][A
+Epoch 76: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.214, v_num=0][A
+Epoch 76: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.214, v_num=0]Epoch 76, global step 9240: 'val/CER' was not in top 1
+Epoch 77:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.196, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 77:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.196, v_num=0][A
+Epoch 77:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.196, v_num=0][A
+Epoch 77:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.196, v_num=0][A
+Epoch 77:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.196, v_num=0][A
+Epoch 77:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.196, v_num=0][A
+Epoch 77:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.196, v_num=0][A
+Epoch 77: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.196, v_num=0][A
+Epoch 77: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.196, v_num=0]Epoch 77, global step 9360: 'val/CER' reached 13.24767 (best 13.24767), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=77-step=9360.ckpt' as top 1
+Epoch 78:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.214, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 78:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.214, v_num=0][A
+Epoch 78:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.214, v_num=0][A
+Epoch 78:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.214, v_num=0][A
+Epoch 78:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.214, v_num=0][A
+Epoch 78:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.214, v_num=0][A
+Epoch 78:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.214, v_num=0][A
+Epoch 78: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.214, v_num=0][A
+Epoch 78: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.214, v_num=0]Epoch 78, global step 9480: 'val/CER' was not in top 1
+Epoch 79:  94%|█████████▍| 120/127 [03:24<00:11,  1.71s/it, loss=0.204, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 79:  95%|█████████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.204, v_num=0][A
+Epoch 79:  96%|█████████▌| 122/127 [03:26<00:08,  1.69s/it, loss=0.204, v_num=0][A
+Epoch 79:  97%|█████████▋| 123/127 [03:27<00:06,  1.68s/it, loss=0.204, v_num=0][A
+Epoch 79:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.204, v_num=0][A
+Epoch 79:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.204, v_num=0][A
+Epoch 79:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.204, v_num=0][A
+Epoch 79: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.204, v_num=0][A
+Epoch 79: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.204, v_num=0]Epoch 79, global step 9600: 'val/CER' was not in top 1
+Epoch 80:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.195, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 80:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.195, v_num=0][A
+Epoch 80:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.195, v_num=0][A
+Epoch 80:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.195, v_num=0][A
+Epoch 80:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.195, v_num=0][A
+Epoch 80:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.195, v_num=0][A
+Epoch 80:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.195, v_num=0][A
+Epoch 80: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.195, v_num=0][A
+Epoch 80: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.195, v_num=0]Epoch 80, global step 9720: 'val/CER' was not in top 1
+Epoch 81:  94%|█████████▍| 120/127 [03:24<00:11,  1.71s/it, loss=0.189, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 81:  95%|█████████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.189, v_num=0][A
+Epoch 81:  96%|█████████▌| 122/127 [03:26<00:08,  1.69s/it, loss=0.189, v_num=0][A
+Epoch 81:  97%|█████████▋| 123/127 [03:27<00:06,  1.68s/it, loss=0.189, v_num=0][A
+Epoch 81:  98%|█████████▊| 124/127 [03:27<00:05,  1.67s/it, loss=0.189, v_num=0][A
+Epoch 81:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.189, v_num=0][A
+Epoch 81:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.189, v_num=0][A
+Epoch 81: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.189, v_num=0][A
+Epoch 81: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.189, v_num=0]Epoch 81, global step 9840: 'val/CER' was not in top 1
+Epoch 82:  94%|██████████▍| 120/127 [03:24<00:11,  1.71s/it, loss=0.18, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 82:  95%|██████████▍| 121/127 [03:26<00:10,  1.70s/it, loss=0.18, v_num=0][A
+Epoch 82:  96%|██████████▌| 122/127 [03:26<00:08,  1.69s/it, loss=0.18, v_num=0][A
+Epoch 82:  97%|██████████▋| 123/127 [03:27<00:06,  1.68s/it, loss=0.18, v_num=0][A
+Epoch 82:  98%|██████████▋| 124/127 [03:27<00:05,  1.67s/it, loss=0.18, v_num=0][A
+Epoch 82:  98%|██████████▊| 125/127 [03:28<00:03,  1.66s/it, loss=0.18, v_num=0][A
+Epoch 82:  99%|██████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.18, v_num=0][A
+Epoch 82: 100%|███████████| 127/127 [03:28<00:00,  1.65s/it, loss=0.18, v_num=0][A
+Epoch 82: 100%|███████████| 127/127 [03:28<00:00,  1.65s/it, loss=0.18, v_num=0]Epoch 82, global step 9960: 'val/CER' was not in top 1
+Epoch 83:  94%|█████████▍| 120/127 [03:24<00:11,  1.71s/it, loss=0.177, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 83:  95%|█████████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.177, v_num=0][A
+Epoch 83:  96%|█████████▌| 122/127 [03:26<00:08,  1.69s/it, loss=0.177, v_num=0][A
+Epoch 83:  97%|█████████▋| 123/127 [03:27<00:06,  1.68s/it, loss=0.177, v_num=0][A
+Epoch 83:  98%|█████████▊| 124/127 [03:27<00:05,  1.67s/it, loss=0.177, v_num=0][A
+Epoch 83:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.177, v_num=0][A
+Epoch 83:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.177, v_num=0][A
+Epoch 83: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.177, v_num=0][A
+Epoch 83: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.177, v_num=0]Epoch 83, global step 10080: 'val/CER' was not in top 1
+Epoch 84:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.172, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 84:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.172, v_num=0][A
+Epoch 84:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.172, v_num=0][A
+Epoch 84:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.172, v_num=0][A
+Epoch 84:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.172, v_num=0][A
+Epoch 84:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.172, v_num=0][A
+Epoch 84:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.172, v_num=0][A
+Epoch 84: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.172, v_num=0][A
+Epoch 84: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.172, v_num=0]Epoch 84, global step 10200: 'val/CER' was not in top 1
+Epoch 85:  94%|█████████▍| 120/127 [03:24<00:11,  1.71s/it, loss=0.165, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 85:  95%|█████████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.165, v_num=0][A
+Epoch 85:  96%|█████████▌| 122/127 [03:26<00:08,  1.69s/it, loss=0.165, v_num=0][A
+Epoch 85:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.165, v_num=0][A
+Epoch 85:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.165, v_num=0][A
+Epoch 85:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.165, v_num=0][A
+Epoch 85:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.165, v_num=0][A
+Epoch 85: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.165, v_num=0][A
+Epoch 85: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.165, v_num=0]Epoch 85, global step 10320: 'val/CER' reached 12.93753 (best 12.93753), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=85-step=10320.ckpt' as top 1
+Epoch 86:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.177, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 86:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.177, v_num=0][A
+Epoch 86:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.177, v_num=0][A
+Epoch 86:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.177, v_num=0][A
+Epoch 86:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.177, v_num=0][A
+Epoch 86:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.177, v_num=0][A
+Epoch 86:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.177, v_num=0][A
+Epoch 86: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.177, v_num=0][A
+Epoch 86: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.177, v_num=0]Epoch 86, global step 10440: 'val/CER' reached 12.87107 (best 12.87107), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=86-step=10440.ckpt' as top 1
+Epoch 87:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.161, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 87:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.161, v_num=0][A
+Epoch 87:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.161, v_num=0][A
+Epoch 87:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.161, v_num=0][A
+Epoch 87:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.161, v_num=0][A
+Epoch 87:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.161, v_num=0][A
+Epoch 87:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.161, v_num=0][A
+Epoch 87: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.161, v_num=0][A
+Epoch 87: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.161, v_num=0]Epoch 87, global step 10560: 'val/CER' was not in top 1
+Epoch 88:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.153, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 88:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.153, v_num=0][A
+Epoch 88:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.153, v_num=0][A
+Epoch 88:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.153, v_num=0][A
+Epoch 88:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.153, v_num=0][A
+Epoch 88:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.153, v_num=0][A
+Epoch 88:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.153, v_num=0][A
+Epoch 88: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.153, v_num=0][A
+Epoch 88: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.153, v_num=0]Epoch 88, global step 10680: 'val/CER' reached 12.73815 (best 12.73815), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=88-step=10680.ckpt' as top 1
+Epoch 89:  94%|██████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.14, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 89:  95%|██████████▍| 121/127 [03:26<00:10,  1.71s/it, loss=0.14, v_num=0][A
+Epoch 89:  96%|██████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.14, v_num=0][A
+Epoch 89:  97%|██████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.14, v_num=0][A
+Epoch 89:  98%|██████████▋| 124/127 [03:27<00:05,  1.68s/it, loss=0.14, v_num=0][A
+Epoch 89:  98%|██████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.14, v_num=0][A
+Epoch 89:  99%|██████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.14, v_num=0][A
+Epoch 89: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.14, v_num=0][A
+Epoch 89: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.14, v_num=0]Epoch 89, global step 10800: 'val/CER' was not in top 1
+Epoch 90:  94%|█████████▍| 120/127 [03:24<00:11,  1.71s/it, loss=0.143, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 90:  95%|█████████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.143, v_num=0][A
+Epoch 90:  96%|█████████▌| 122/127 [03:26<00:08,  1.69s/it, loss=0.143, v_num=0][A
+Epoch 90:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.143, v_num=0][A
+Epoch 90:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.143, v_num=0][A
+Epoch 90:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.143, v_num=0][A
+Epoch 90:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.143, v_num=0][A
+Epoch 90: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.143, v_num=0][A
+Epoch 90: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.143, v_num=0]Epoch 90, global step 10920: 'val/CER' was not in top 1
+Epoch 91:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.126, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 91:  95%|█████████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.126, v_num=0][A
+Epoch 91:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.126, v_num=0][A
+Epoch 91:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.126, v_num=0][A
+Epoch 91:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.126, v_num=0][A
+Epoch 91:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.126, v_num=0][A
+Epoch 91:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.126, v_num=0][A
+Epoch 91: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.126, v_num=0][A
+Epoch 91: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.126, v_num=0]Epoch 91, global step 11040: 'val/CER' was not in top 1
+Epoch 92:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.142, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 92:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.142, v_num=0][A
+Epoch 92:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.142, v_num=0][A
+Epoch 92:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.142, v_num=0][A
+Epoch 92:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.142, v_num=0][A
+Epoch 92:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.142, v_num=0][A
+Epoch 92:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.142, v_num=0][A
+Epoch 92: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.142, v_num=0][A
+Epoch 92: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.142, v_num=0]Epoch 92, global step 11160: 'val/CER' reached 12.45016 (best 12.45016), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=92-step=11160.ckpt' as top 1
+Epoch 93:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.133, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 93:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.133, v_num=0][A
+Epoch 93:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.133, v_num=0][A
+Epoch 93:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.133, v_num=0][A
+Epoch 93:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.133, v_num=0][A
+Epoch 93:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.133, v_num=0][A
+Epoch 93:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.133, v_num=0][A
+Epoch 93: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.133, v_num=0][A
+Epoch 93: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.133, v_num=0]Epoch 93, global step 11280: 'val/CER' was not in top 1
+Epoch 94:  94%|█████████▍| 120/127 [03:24<00:11,  1.71s/it, loss=0.121, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 94:  95%|█████████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.121, v_num=0][A
+Epoch 94:  96%|█████████▌| 122/127 [03:26<00:08,  1.69s/it, loss=0.121, v_num=0][A
+Epoch 94:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.121, v_num=0][A
+Epoch 94:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.121, v_num=0][A
+Epoch 94:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.121, v_num=0][A
+Epoch 94:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.121, v_num=0][A
+Epoch 94: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.121, v_num=0][A
+Epoch 94: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.121, v_num=0]Epoch 94, global step 11400: 'val/CER' was not in top 1
+Epoch 95:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.123, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 95:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.123, v_num=0][A
+Epoch 95:  96%|█████████▌| 122/127 [03:27<00:08,  1.70s/it, loss=0.123, v_num=0][A
+Epoch 95:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.123, v_num=0][A
+Epoch 95:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.123, v_num=0][A
+Epoch 95:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.123, v_num=0][A
+Epoch 95:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.123, v_num=0][A
+Epoch 95: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.123, v_num=0][A
+Epoch 95: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.123, v_num=0]Epoch 95, global step 11520: 'val/CER' was not in top 1
+Epoch 96:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.112, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 96:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.112, v_num=0][A
+Epoch 96:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.112, v_num=0][A
+Epoch 96:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.112, v_num=0][A
+Epoch 96:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.112, v_num=0][A
+Epoch 96:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.112, v_num=0][A
+Epoch 96:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.112, v_num=0][A
+Epoch 96: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.112, v_num=0][A
+Epoch 96: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.112, v_num=0]Epoch 96, global step 11640: 'val/CER' reached 12.14001 (best 12.14001), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=96-step=11640.ckpt' as top 1
+Epoch 97:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.114, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 97:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.114, v_num=0][A
+Epoch 97:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.114, v_num=0][A
+Epoch 97:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.114, v_num=0][A
+Epoch 97:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.114, v_num=0][A
+Epoch 97:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.114, v_num=0][A
+Epoch 97:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.114, v_num=0][A
+Epoch 97: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.114, v_num=0][A
+Epoch 97: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.114, v_num=0]Epoch 97, global step 11760: 'val/CER' was not in top 1
+Epoch 98:  94%|█████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.115, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 98:  95%|█████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.115, v_num=0][A
+Epoch 98:  96%|█████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.115, v_num=0][A
+Epoch 98:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.115, v_num=0][A
+Epoch 98:  98%|█████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.115, v_num=0][A
+Epoch 98:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.115, v_num=0][A
+Epoch 98:  99%|█████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.115, v_num=0][A
+Epoch 98: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.115, v_num=0][A
+Epoch 98: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.115, v_num=0]Epoch 98, global step 11880: 'val/CER' was not in top 1
+Epoch 99:  94%|█████████▍| 120/127 [03:24<00:11,  1.71s/it, loss=0.108, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 99:  95%|█████████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.108, v_num=0][A
+Epoch 99:  96%|█████████▌| 122/127 [03:26<00:08,  1.69s/it, loss=0.108, v_num=0][A
+Epoch 99:  97%|█████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.108, v_num=0][A
+Epoch 99:  98%|█████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.108, v_num=0][A
+Epoch 99:  98%|█████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.108, v_num=0][A
+Epoch 99:  99%|█████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.108, v_num=0][A
+Epoch 99: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.108, v_num=0][A
+Epoch 99: 100%|██████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.108, v_num=0]Epoch 99, global step 12000: 'val/CER' was not in top 1
+Epoch 100:  94%|████████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.104, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 100:  95%|████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.104, v_num=0][A
+Epoch 100:  96%|████████▋| 122/127 [03:26<00:08,  1.70s/it, loss=0.104, v_num=0][A
+Epoch 100:  97%|████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.104, v_num=0][A
+Epoch 100:  98%|████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.104, v_num=0][A
+Epoch 100:  98%|████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.104, v_num=0][A
+Epoch 100:  99%|████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.104, v_num=0][A
+Epoch 100: 100%|█████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.104, v_num=0][A
+Epoch 100: 100%|█████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.104, v_num=0]Epoch 100, global step 12120: 'val/CER' was not in top 1
+Epoch 101:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0927, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 101:  95%|███████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.0927, v_num=0][A
+Epoch 101:  96%|███████▋| 122/127 [03:26<00:08,  1.70s/it, loss=0.0927, v_num=0][A
+Epoch 101:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0927, v_num=0][A
+Epoch 101:  98%|███████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.0927, v_num=0][A
+Epoch 101:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0927, v_num=0][A
+Epoch 101:  99%|███████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.0927, v_num=0][A
+Epoch 101: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0927, v_num=0][A
+Epoch 101: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0927, v_num=0][AEpoch 101, global step 12240: 'val/CER' reached 11.40895 (best 11.40895), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=101-step=12240.ckpt' as top 1
+Epoch 102:  94%|███████▌| 120/127 [03:24<00:11,  1.71s/it, loss=0.0943, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 102:  95%|███████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.0943, v_num=0][A
+Epoch 102:  96%|███████▋| 122/127 [03:26<00:08,  1.69s/it, loss=0.0943, v_num=0][A
+Epoch 102:  97%|███████▋| 123/127 [03:27<00:06,  1.68s/it, loss=0.0943, v_num=0][A
+Epoch 102:  98%|███████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.0943, v_num=0][A
+Epoch 102:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0943, v_num=0][A
+Epoch 102:  99%|███████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.0943, v_num=0][A
+Epoch 102: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0943, v_num=0][A
+Epoch 102: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0943, v_num=0]Epoch 102, global step 12360: 'val/CER' was not in top 1
+Epoch 103:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0879, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 103:  95%|███████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.0879, v_num=0][A
+Epoch 103:  96%|███████▋| 122/127 [03:26<00:08,  1.69s/it, loss=0.0879, v_num=0][A
+Epoch 103:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0879, v_num=0][A
+Epoch 103:  98%|███████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.0879, v_num=0][A
+Epoch 103:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0879, v_num=0][A
+Epoch 103:  99%|███████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.0879, v_num=0][A
+Epoch 103: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0879, v_num=0][A
+Epoch 103: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0879, v_num=0]Epoch 103, global step 12480: 'val/CER' was not in top 1
+Epoch 104:  94%|██████████▍| 120/127 [03:25<00:11,  1.71s/it, loss=0.1, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 104:  95%|██████████▍| 121/127 [03:26<00:10,  1.71s/it, loss=0.1, v_num=0][A
+Epoch 104:  96%|██████████▌| 122/127 [03:26<00:08,  1.70s/it, loss=0.1, v_num=0][A
+Epoch 104:  97%|██████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.1, v_num=0][A
+Epoch 104:  98%|██████████▋| 124/127 [03:28<00:05,  1.68s/it, loss=0.1, v_num=0][A
+Epoch 104:  98%|██████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.1, v_num=0][A
+Epoch 104:  99%|██████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.1, v_num=0][A
+Epoch 104: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.1, v_num=0][A
+Epoch 104: 100%|███████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.1, v_num=0]Epoch 104, global step 12600: 'val/CER' was not in top 1
+Epoch 105:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0899, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 105:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0899, v_num=0][A
+Epoch 105:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0899, v_num=0][A
+Epoch 105:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0899, v_num=0][A
+Epoch 105:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0899, v_num=0][A
+Epoch 105:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0899, v_num=0][A
+Epoch 105:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0899, v_num=0][A
+Epoch 105: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0899, v_num=0][A
+Epoch 105: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0899, v_num=0]Epoch 105, global step 12720: 'val/CER' was not in top 1
+Epoch 106:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0775, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 106:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0775, v_num=0][A
+Epoch 106:  96%|███████▋| 122/127 [03:26<00:08,  1.70s/it, loss=0.0775, v_num=0][A
+Epoch 106:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0775, v_num=0][A
+Epoch 106:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0775, v_num=0][A
+Epoch 106:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0775, v_num=0][A
+Epoch 106:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0775, v_num=0][A
+Epoch 106: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0775, v_num=0][A
+Epoch 106: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0775, v_num=0]Epoch 106, global step 12840: 'val/CER' was not in top 1
+Epoch 107:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0845, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 107:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0845, v_num=0][A
+Epoch 107:  96%|███████▋| 122/127 [03:26<00:08,  1.70s/it, loss=0.0845, v_num=0][A
+Epoch 107:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0845, v_num=0][A
+Epoch 107:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0845, v_num=0][A
+Epoch 107:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0845, v_num=0][A
+Epoch 107:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0845, v_num=0][A
+Epoch 107: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0845, v_num=0][A
+Epoch 107: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0845, v_num=0]Epoch 107, global step 12960: 'val/CER' was not in top 1
+Epoch 108:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0772, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 108:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0772, v_num=0][A
+Epoch 108:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0772, v_num=0][A
+Epoch 108:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0772, v_num=0][A
+Epoch 108:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0772, v_num=0][A
+Epoch 108:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0772, v_num=0][A
+Epoch 108:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0772, v_num=0][A
+Epoch 108: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0772, v_num=0][A
+Epoch 108: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0772, v_num=0]Epoch 108, global step 13080: 'val/CER' was not in top 1
+Epoch 109:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0722, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 109:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0722, v_num=0][A
+Epoch 109:  96%|███████▋| 122/127 [03:26<00:08,  1.70s/it, loss=0.0722, v_num=0][A
+Epoch 109:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0722, v_num=0][A
+Epoch 109:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0722, v_num=0][A
+Epoch 109:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0722, v_num=0][A
+Epoch 109:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0722, v_num=0][A
+Epoch 109: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0722, v_num=0][A
+Epoch 109: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0722, v_num=0]Epoch 109, global step 13200: 'val/CER' was not in top 1
+Epoch 110:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0787, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 110:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0787, v_num=0][A
+Epoch 110:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0787, v_num=0][A
+Epoch 110:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0787, v_num=0][A
+Epoch 110:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0787, v_num=0][A
+Epoch 110:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0787, v_num=0][A
+Epoch 110:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0787, v_num=0][A
+Epoch 110: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0787, v_num=0][A
+Epoch 110: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0787, v_num=0]Epoch 110, global step 13320: 'val/CER' was not in top 1
+Epoch 111:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0716, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 111:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0716, v_num=0][A
+Epoch 111:  96%|███████▋| 122/127 [03:26<00:08,  1.70s/it, loss=0.0716, v_num=0][A
+Epoch 111:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0716, v_num=0][A
+Epoch 111:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0716, v_num=0][A
+Epoch 111:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0716, v_num=0][A
+Epoch 111:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0716, v_num=0][A
+Epoch 111: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0716, v_num=0][A
+Epoch 111: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0716, v_num=0]Epoch 111, global step 13440: 'val/CER' was not in top 1
+Epoch 112:  94%|████████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.072, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 112:  95%|████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.072, v_num=0][A
+Epoch 112:  96%|████████▋| 122/127 [03:26<00:08,  1.70s/it, loss=0.072, v_num=0][A
+Epoch 112:  97%|████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.072, v_num=0][A
+Epoch 112:  98%|████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.072, v_num=0][A
+Epoch 112:  98%|████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.072, v_num=0][A
+Epoch 112:  99%|████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.072, v_num=0][A
+Epoch 112: 100%|█████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.072, v_num=0][A
+Epoch 112: 100%|█████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.072, v_num=0]Epoch 112, global step 13560: 'val/CER' was not in top 1
+Epoch 113:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0764, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 113:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0764, v_num=0][A
+Epoch 113:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0764, v_num=0][A
+Epoch 113:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0764, v_num=0][A
+Epoch 113:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0764, v_num=0][A
+Epoch 113:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0764, v_num=0][A
+Epoch 113:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0764, v_num=0][A
+Epoch 113: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0764, v_num=0][A
+Epoch 113: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0764, v_num=0]Epoch 113, global step 13680: 'val/CER' was not in top 1
+Epoch 114:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0709, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 114:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0709, v_num=0][A
+Epoch 114:  96%|███████▋| 122/127 [03:26<00:08,  1.70s/it, loss=0.0709, v_num=0][A
+Epoch 114:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0709, v_num=0][A
+Epoch 114:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0709, v_num=0][A
+Epoch 114:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0709, v_num=0][A
+Epoch 114:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0709, v_num=0][A
+Epoch 114: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0709, v_num=0][A
+Epoch 114: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0709, v_num=0]Epoch 114, global step 13800: 'val/CER' was not in top 1
+Epoch 115:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0641, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 115:  95%|███████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.0641, v_num=0][A
+Epoch 115:  96%|███████▋| 122/127 [03:26<00:08,  1.70s/it, loss=0.0641, v_num=0][A
+Epoch 115:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0641, v_num=0][A
+Epoch 115:  98%|███████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.0641, v_num=0][A
+Epoch 115:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0641, v_num=0][A
+Epoch 115:  99%|███████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.0641, v_num=0][A
+Epoch 115: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0641, v_num=0][A
+Epoch 115: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0641, v_num=0]Epoch 115, global step 13920: 'val/CER' was not in top 1
+Epoch 116:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0626, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 116:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0626, v_num=0][A
+Epoch 116:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0626, v_num=0][A
+Epoch 116:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0626, v_num=0][A
+Epoch 116:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0626, v_num=0][A
+Epoch 116:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0626, v_num=0][A
+Epoch 116:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0626, v_num=0][A
+Epoch 116: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0626, v_num=0][A
+Epoch 116: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0626, v_num=0]Epoch 116, global step 14040: 'val/CER' was not in top 1
+Epoch 117:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0652, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 117:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0652, v_num=0][A
+Epoch 117:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0652, v_num=0][A
+Epoch 117:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0652, v_num=0][A
+Epoch 117:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0652, v_num=0][A
+Epoch 117:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0652, v_num=0][A
+Epoch 117:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0652, v_num=0][A
+Epoch 117: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0652, v_num=0][A
+Epoch 117: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0652, v_num=0]Epoch 117, global step 14160: 'val/CER' reached 11.25388 (best 11.25388), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=117-step=14160.ckpt' as top 1
+Epoch 118:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0617, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 118:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0617, v_num=0][A
+Epoch 118:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0617, v_num=0][A
+Epoch 118:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0617, v_num=0][A
+Epoch 118:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0617, v_num=0][A
+Epoch 118:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0617, v_num=0][A
+Epoch 118:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0617, v_num=0][A
+Epoch 118: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0617, v_num=0][A
+Epoch 118: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0617, v_num=0]Epoch 118, global step 14280: 'val/CER' was not in top 1
+Epoch 119:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0641, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 119:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0641, v_num=0][A
+Epoch 119:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0641, v_num=0][A
+Epoch 119:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0641, v_num=0][A
+Epoch 119:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0641, v_num=0][A
+Epoch 119:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0641, v_num=0][A
+Epoch 119:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0641, v_num=0][A
+Epoch 119: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0641, v_num=0][A
+Epoch 119: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0641, v_num=0]Epoch 119, global step 14400: 'val/CER' reached 10.94373 (best 10.94373), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=119-step=14400.ckpt' as top 1
+Epoch 120:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0589, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 120:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0589, v_num=0][A
+Epoch 120:  96%|███████▋| 122/127 [03:26<00:08,  1.70s/it, loss=0.0589, v_num=0][A
+Epoch 120:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0589, v_num=0][A
+Epoch 120:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0589, v_num=0][A
+Epoch 120:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0589, v_num=0][A
+Epoch 120:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0589, v_num=0][A
+Epoch 120: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0589, v_num=0][A
+Epoch 120: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0589, v_num=0]Epoch 120, global step 14520: 'val/CER' was not in top 1
+Epoch 121:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0602, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 121:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0602, v_num=0][A
+Epoch 121:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0602, v_num=0][A
+Epoch 121:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0602, v_num=0][A
+Epoch 121:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0602, v_num=0][A
+Epoch 121:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0602, v_num=0][A
+Epoch 121:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0602, v_num=0][A
+Epoch 121: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0602, v_num=0][A
+Epoch 121: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0602, v_num=0]Epoch 121, global step 14640: 'val/CER' was not in top 1
+Epoch 122:  94%|███████▌| 120/127 [03:25<00:12,  1.71s/it, loss=0.0631, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 122:  95%|███████▌| 121/127 [03:27<00:10,  1.71s/it, loss=0.0631, v_num=0][A
+Epoch 122:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0631, v_num=0][A
+Epoch 122:  97%|███████▋| 123/127 [03:28<00:06,  1.69s/it, loss=0.0631, v_num=0][A
+Epoch 122:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0631, v_num=0][A
+Epoch 122:  98%|███████▊| 125/127 [03:29<00:03,  1.67s/it, loss=0.0631, v_num=0][A
+Epoch 122:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0631, v_num=0][A
+Epoch 122: 100%|████████| 127/127 [03:30<00:00,  1.65s/it, loss=0.0631, v_num=0][A
+Epoch 122: 100%|████████| 127/127 [03:30<00:00,  1.65s/it, loss=0.0631, v_num=0]Epoch 122, global step 14760: 'val/CER' was not in top 1
+Epoch 123:  94%|████████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.057, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 123:  95%|████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.057, v_num=0][A
+Epoch 123:  96%|████████▋| 122/127 [03:26<00:08,  1.70s/it, loss=0.057, v_num=0][A
+Epoch 123:  97%|████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.057, v_num=0][A
+Epoch 123:  98%|████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.057, v_num=0][A
+Epoch 123:  98%|████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.057, v_num=0][A
+Epoch 123:  99%|████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.057, v_num=0][A
+Epoch 123: 100%|█████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.057, v_num=0][A
+Epoch 123: 100%|█████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.057, v_num=0]Epoch 123, global step 14880: 'val/CER' was not in top 1
+Epoch 124:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0482, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 124:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0482, v_num=0][A
+Epoch 124:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0482, v_num=0][A
+Epoch 124:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0482, v_num=0][A
+Epoch 124:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0482, v_num=0][A
+Epoch 124:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0482, v_num=0][A
+Epoch 124:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0482, v_num=0][A
+Epoch 124: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0482, v_num=0][A
+Epoch 124: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0482, v_num=0]Epoch 124, global step 15000: 'val/CER' was not in top 1
+Epoch 125:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0594, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 125:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0594, v_num=0][A
+Epoch 125:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0594, v_num=0][A
+Epoch 125:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0594, v_num=0][A
+Epoch 125:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0594, v_num=0][A
+Epoch 125:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0594, v_num=0][A
+Epoch 125:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0594, v_num=0][A
+Epoch 125: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0594, v_num=0][A
+Epoch 125: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0594, v_num=0]Epoch 125, global step 15120: 'val/CER' was not in top 1
+Epoch 126:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0528, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 126:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0528, v_num=0][A
+Epoch 126:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0528, v_num=0][A
+Epoch 126:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0528, v_num=0][A
+Epoch 126:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0528, v_num=0][A
+Epoch 126:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0528, v_num=0][A
+Epoch 126:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0528, v_num=0][A
+Epoch 126: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0528, v_num=0][A
+Epoch 126: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0528, v_num=0]Epoch 126, global step 15240: 'val/CER' reached 10.81081 (best 10.81081), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=126-step=15240.ckpt' as top 1
+Epoch 127:  94%|████████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.055, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 127:  95%|████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.055, v_num=0][A
+Epoch 127:  96%|████████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.055, v_num=0][A
+Epoch 127:  97%|████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.055, v_num=0][A
+Epoch 127:  98%|████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.055, v_num=0][A
+Epoch 127:  98%|████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.055, v_num=0][A
+Epoch 127:  99%|████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.055, v_num=0][A
+Epoch 127: 100%|█████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.055, v_num=0][A
+Epoch 127: 100%|█████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.055, v_num=0]Epoch 127, global step 15360: 'val/CER' was not in top 1
+Epoch 128:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0468, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 128:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0468, v_num=0][A
+Epoch 128:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0468, v_num=0][A
+Epoch 128:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0468, v_num=0][A
+Epoch 128:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0468, v_num=0][A
+Epoch 128:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0468, v_num=0][A
+Epoch 128:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0468, v_num=0][A
+Epoch 128: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0468, v_num=0][A
+Epoch 128: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0468, v_num=0]Epoch 128, global step 15480: 'val/CER' was not in top 1
+Epoch 129:  94%|████████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.055, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 129:  95%|████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.055, v_num=0][A
+Epoch 129:  96%|████████▋| 122/127 [03:26<00:08,  1.70s/it, loss=0.055, v_num=0][A
+Epoch 129:  97%|████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.055, v_num=0][A
+Epoch 129:  98%|████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.055, v_num=0][A
+Epoch 129:  98%|████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.055, v_num=0][A
+Epoch 129:  99%|████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.055, v_num=0][A
+Epoch 129: 100%|█████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.055, v_num=0][A
+Epoch 129: 100%|█████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.055, v_num=0]Epoch 129, global step 15600: 'val/CER' reached 10.72220 (best 10.72220), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=129-step=15600.ckpt' as top 1
+Epoch 130:  94%|███████▌| 120/127 [03:24<00:11,  1.71s/it, loss=0.0553, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 130:  95%|███████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.0553, v_num=0][A
+Epoch 130:  96%|███████▋| 122/127 [03:26<00:08,  1.69s/it, loss=0.0553, v_num=0][A
+Epoch 130:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0553, v_num=0][A
+Epoch 130:  98%|███████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.0553, v_num=0][A
+Epoch 130:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0553, v_num=0][A
+Epoch 130:  99%|███████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.0553, v_num=0][A
+Epoch 130: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0553, v_num=0][A
+Epoch 130: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0553, v_num=0]Epoch 130, global step 15720: 'val/CER' was not in top 1
+Epoch 131:  94%|███████▌| 120/127 [03:24<00:11,  1.71s/it, loss=0.0449, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 131:  95%|███████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.0449, v_num=0][A
+Epoch 131:  96%|███████▋| 122/127 [03:26<00:08,  1.69s/it, loss=0.0449, v_num=0][A
+Epoch 131:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0449, v_num=0][A
+Epoch 131:  98%|███████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.0449, v_num=0][A
+Epoch 131:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0449, v_num=0][A
+Epoch 131:  99%|███████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.0449, v_num=0][A
+Epoch 131: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0449, v_num=0][A
+Epoch 131: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0449, v_num=0]Epoch 131, global step 15840: 'val/CER' reached 10.52282 (best 10.52282), saving model to '/home/arjun/emg2qwerty-main_cnn_lstm_transformer/logs/2026-03-09/09-45-23/checkpoints/epoch=131-step=15840.ckpt' as top 1
+Epoch 132:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0514, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 132:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0514, v_num=0][A
+Epoch 132:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0514, v_num=0][A
+Epoch 132:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0514, v_num=0][A
+Epoch 132:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0514, v_num=0][A
+Epoch 132:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0514, v_num=0][A
+Epoch 132:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0514, v_num=0][A
+Epoch 132: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0514, v_num=0][A
+Epoch 132: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0514, v_num=0]Epoch 132, global step 15960: 'val/CER' was not in top 1
+Epoch 133:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0589, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 133:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0589, v_num=0][A
+Epoch 133:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0589, v_num=0][A
+Epoch 133:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0589, v_num=0][A
+Epoch 133:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0589, v_num=0][A
+Epoch 133:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0589, v_num=0][A
+Epoch 133:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0589, v_num=0][A
+Epoch 133: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0589, v_num=0][A
+Epoch 133: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0589, v_num=0]Epoch 133, global step 16080: 'val/CER' was not in top 1
+Epoch 134:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0483, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 134:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0483, v_num=0][A
+Epoch 134:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0483, v_num=0][A
+Epoch 134:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0483, v_num=0][A
+Epoch 134:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0483, v_num=0][A
+Epoch 134:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0483, v_num=0][A
+Epoch 134:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0483, v_num=0][A
+Epoch 134: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0483, v_num=0][A
+Epoch 134: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0483, v_num=0]Epoch 134, global step 16200: 'val/CER' was not in top 1
+Epoch 135:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0479, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 135:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0479, v_num=0][A
+Epoch 135:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0479, v_num=0][A
+Epoch 135:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0479, v_num=0][A
+Epoch 135:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0479, v_num=0][A
+Epoch 135:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0479, v_num=0][A
+Epoch 135:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0479, v_num=0][A
+Epoch 135: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0479, v_num=0][A
+Epoch 135: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0479, v_num=0]Epoch 135, global step 16320: 'val/CER' was not in top 1
+Epoch 136:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0452, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 136:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0452, v_num=0][A
+Epoch 136:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0452, v_num=0][A
+Epoch 136:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0452, v_num=0][A
+Epoch 136:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0452, v_num=0][A
+Epoch 136:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0452, v_num=0][A
+Epoch 136:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0452, v_num=0][A
+Epoch 136: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0452, v_num=0][A
+Epoch 136: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0452, v_num=0]Epoch 136, global step 16440: 'val/CER' was not in top 1
+Epoch 137:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0434, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 137:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0434, v_num=0][A
+Epoch 137:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0434, v_num=0][A
+Epoch 137:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0434, v_num=0][A
+Epoch 137:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0434, v_num=0][A
+Epoch 137:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0434, v_num=0][A
+Epoch 137:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0434, v_num=0][A
+Epoch 137: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0434, v_num=0][A
+Epoch 137: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0434, v_num=0]Epoch 137, global step 16560: 'val/CER' was not in top 1
+Epoch 138:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0426, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 138:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0426, v_num=0][A
+Epoch 138:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0426, v_num=0][A
+Epoch 138:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0426, v_num=0][A
+Epoch 138:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0426, v_num=0][A
+Epoch 138:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0426, v_num=0][A
+Epoch 138:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0426, v_num=0][A
+Epoch 138: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0426, v_num=0][A
+Epoch 138: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0426, v_num=0]Epoch 138, global step 16680: 'val/CER' was not in top 1
+Epoch 139:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0449, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 139:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0449, v_num=0][A
+Epoch 139:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0449, v_num=0][A
+Epoch 139:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0449, v_num=0][A
+Epoch 139:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0449, v_num=0][A
+Epoch 139:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0449, v_num=0][A
+Epoch 139:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0449, v_num=0][A
+Epoch 139: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0449, v_num=0][A
+Epoch 139: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0449, v_num=0]Epoch 139, global step 16800: 'val/CER' was not in top 1
+Epoch 140:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0444, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 140:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0444, v_num=0][A
+Epoch 140:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0444, v_num=0][A
+Epoch 140:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0444, v_num=0][A
+Epoch 140:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0444, v_num=0][A
+Epoch 140:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0444, v_num=0][A
+Epoch 140:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0444, v_num=0][A
+Epoch 140: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0444, v_num=0][A
+Epoch 140: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0444, v_num=0]Epoch 140, global step 16920: 'val/CER' was not in top 1
+Epoch 141:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0448, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 141:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0448, v_num=0][A
+Epoch 141:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0448, v_num=0][A
+Epoch 141:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0448, v_num=0][A
+Epoch 141:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0448, v_num=0][A
+Epoch 141:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0448, v_num=0][A
+Epoch 141:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0448, v_num=0][A
+Epoch 141: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0448, v_num=0][A
+Epoch 141: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0448, v_num=0]Epoch 141, global step 17040: 'val/CER' was not in top 1
+Epoch 142:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0477, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 142:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0477, v_num=0][A
+Epoch 142:  96%|███████▋| 122/127 [03:26<00:08,  1.70s/it, loss=0.0477, v_num=0][A
+Epoch 142:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0477, v_num=0][A
+Epoch 142:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0477, v_num=0][A
+Epoch 142:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0477, v_num=0][A
+Epoch 142:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0477, v_num=0][A
+Epoch 142: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0477, v_num=0][A
+Epoch 142: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0477, v_num=0]Epoch 142, global step 17160: 'val/CER' was not in top 1
+Epoch 143:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0508, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 143:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0508, v_num=0][A
+Epoch 143:  96%|███████▋| 122/127 [03:26<00:08,  1.70s/it, loss=0.0508, v_num=0][A
+Epoch 143:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0508, v_num=0][A
+Epoch 143:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0508, v_num=0][A
+Epoch 143:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0508, v_num=0][A
+Epoch 143:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0508, v_num=0][A
+Epoch 143: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0508, v_num=0][A
+Epoch 143: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0508, v_num=0][AEpoch 143, global step 17280: 'val/CER' was not in top 1
+Epoch 144:  94%|████████▌| 120/127 [03:24<00:11,  1.71s/it, loss=0.045, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 144:  95%|████████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.045, v_num=0][A
+Epoch 144:  96%|████████▋| 122/127 [03:26<00:08,  1.70s/it, loss=0.045, v_num=0][A
+Epoch 144:  97%|████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.045, v_num=0][A
+Epoch 144:  98%|████████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.045, v_num=0][A
+Epoch 144:  98%|████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.045, v_num=0][A
+Epoch 144:  99%|████████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.045, v_num=0][A
+Epoch 144: 100%|█████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.045, v_num=0][A
+Epoch 144: 100%|█████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.045, v_num=0]Epoch 144, global step 17400: 'val/CER' was not in top 1
+Epoch 145:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0483, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 145:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0483, v_num=0][A
+Epoch 145:  96%|███████▋| 122/127 [03:26<00:08,  1.70s/it, loss=0.0483, v_num=0][A
+Epoch 145:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0483, v_num=0][A
+Epoch 145:  98%|███████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.0483, v_num=0][A
+Epoch 145:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0483, v_num=0][A
+Epoch 145:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0483, v_num=0][A
+Epoch 145: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0483, v_num=0][A
+Epoch 145: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0483, v_num=0]Epoch 145, global step 17520: 'val/CER' was not in top 1
+Epoch 146:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0495, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 146:  95%|███████▌| 121/127 [03:26<00:10,  1.70s/it, loss=0.0495, v_num=0][A
+Epoch 146:  96%|███████▋| 122/127 [03:26<00:08,  1.69s/it, loss=0.0495, v_num=0][A
+Epoch 146:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0495, v_num=0][A
+Epoch 146:  98%|███████▊| 124/127 [03:27<00:05,  1.68s/it, loss=0.0495, v_num=0][A
+Epoch 146:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0495, v_num=0][A
+Epoch 146:  99%|███████▉| 126/127 [03:28<00:01,  1.66s/it, loss=0.0495, v_num=0][A
+Epoch 146: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0495, v_num=0][A
+Epoch 146: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0495, v_num=0]Epoch 146, global step 17640: 'val/CER' was not in top 1
+Epoch 147:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0442, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 147:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0442, v_num=0][A
+Epoch 147:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0442, v_num=0][A
+Epoch 147:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0442, v_num=0][A
+Epoch 147:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0442, v_num=0][A
+Epoch 147:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0442, v_num=0][A
+Epoch 147:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0442, v_num=0][A
+Epoch 147: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0442, v_num=0][A
+Epoch 147: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0442, v_num=0]Epoch 147, global step 17760: 'val/CER' was not in top 1
+Epoch 148:  94%|████████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.047, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 148:  95%|████████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.047, v_num=0][A
+Epoch 148:  96%|████████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.047, v_num=0][A
+Epoch 148:  97%|████████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.047, v_num=0][A
+Epoch 148:  98%|████████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.047, v_num=0][A
+Epoch 148:  98%|████████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.047, v_num=0][A
+Epoch 148:  99%|████████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.047, v_num=0][A
+Epoch 148: 100%|█████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.047, v_num=0][A
+Epoch 148: 100%|█████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.047, v_num=0]Epoch 148, global step 17880: 'val/CER' was not in top 1
+Epoch 149:  94%|███████▌| 120/127 [03:25<00:11,  1.71s/it, loss=0.0428, v_num=0]
+Validation: 0it [00:00, ?it/s][A
+Validation:   0%|                                         | 0/7 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|                            | 0/7 [00:00<?, ?it/s][A
+Epoch 149:  95%|███████▌| 121/127 [03:26<00:10,  1.71s/it, loss=0.0428, v_num=0][A
+Epoch 149:  96%|███████▋| 122/127 [03:27<00:08,  1.70s/it, loss=0.0428, v_num=0][A
+Epoch 149:  97%|███████▋| 123/127 [03:27<00:06,  1.69s/it, loss=0.0428, v_num=0][A
+Epoch 149:  98%|███████▊| 124/127 [03:28<00:05,  1.68s/it, loss=0.0428, v_num=0][A
+Epoch 149:  98%|███████▊| 125/127 [03:28<00:03,  1.67s/it, loss=0.0428, v_num=0][A
+Epoch 149:  99%|███████▉| 126/127 [03:29<00:01,  1.66s/it, loss=0.0428, v_num=0][A
+Epoch 149: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0428, v_num=0][A
+Epoch 149: 100%|████████| 127/127 [03:29<00:00,  1.65s/it, loss=0.0428, v_num=0]Epoch 149, global step 18000: 'val/CER' was not in top 1
+`Trainer.fit` stopped: `max_epochs=150` reached.
+Epoch 149: 100%|████████| 127/127 [03:32<00:00,  1.67s/it, loss=0.0428, v_num=0]
+/home/arjun/.local/lib/python3.10/site-packages/torch/nn/modules/transformer.py:306: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.self_attn.batch_first was not True(use batch_first for better inference performance)
+  warnings.warn(f"enable_nested_tensor is True, but self.use_nested_tensor is False because {why_not_sparsity_fast_path}")
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+Validation DataLoader 0: 100%|████████████████████| 7/7 [00:03<00:00,  1.96it/s]
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃[1m [0m[1m     Validate metric     [0m[1m [0m┃[1m [0m[1m      DataLoader 0       [0m[1m [0m┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│[36m [0m[36m         val/CER         [0m[36m [0m│[35m [0m[35m   10.522817611694336    [0m[35m [0m│
+│[36m [0m[36m         val/DER         [0m[36m [0m│[35m [0m[35m   1.2848914861679077    [0m[35m [0m│
+│[36m [0m[36m         val/IER         [0m[36m [0m│[35m [0m[35m    2.215330123901367    [0m[35m [0m│
+│[36m [0m[36m         val/SER         [0m[36m [0m│[35m [0m[35m    7.02259635925293     [0m[35m [0m│
+│[36m [0m[36m        val/loss         [0m[36m [0m│[35m [0m[35m   0.6462780833244324    [0m[35m [0m│
+└───────────────────────────┴───────────────────────────┘
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+Testing DataLoader 0: 100%|███████████████████| 281/281 [00:11<00:00, 23.77it/s]
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃[1m [0m[1m       Test metric       [0m[1m [0m┃[1m [0m[1m      DataLoader 0       [0m[1m [0m┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│[36m [0m[36m        test/CER         [0m[36m [0m│[35m [0m[35m   13.035945892333984    [0m[35m [0m│
+│[36m [0m[36m        test/DER         [0m[36m [0m│[35m [0m[35m   1.6024253368377686    [0m[35m [0m│
+│[36m [0m[36m        test/IER         [0m[36m [0m│[35m [0m[35m   2.3603291511535645    [0m[35m [0m│
+│[36m [0m[36m        test/SER         [0m[36m [0m│[35m [0m[35m    9.07319164276123     [0m[35m [0m│
+│[36m [0m[36m        test/loss        [0m[36m [0m│[35m [0m[35m   0.8259727358818054    [0m[35m [0m│
+└───────────────────────────┴───────────────────────────┘
+{'val_metrics': [{'val/loss': 0.6462780833244324,
+                  'val/CER': 10.522817611694336,
+                  'val/IER': 2.215330123901367,
+                  'val/DER': 1.2848914861679077,
+                  'val/SER': 7.02259635925293}],
+ 'test_metrics': [{'test/loss': 0.8259727358818054,
+                   'test/CER': 13.035945892333984,
+                   'test/IER': 2.3603291511535645,
+                   'test/DER': 1.6024253368377686,
+                   'test/SER': 9.07319164276123}],
+ 'best_checkpoint': ''}
