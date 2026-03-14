@@ -1,0 +1,26 @@
+# @package _global_
+#
+# 12-channel electrode selection: evenly spaced from the 16-electrode ring.
+# Indices skip every 4th electrode: [1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15]
+# gives 12 of 16 with uniform gaps. Alternatively, a simpler near-uniform
+# spacing is [0, 1, 3, 4, 5, 7, 8, 9, 11, 12, 13, 15] (drop every 4th).
+#
+electrode_indices: [0, 1, 3, 4, 5, 7, 8, 9, 11, 12, 13, 15]
+
+module:
+  _target_: emg2qwerty.lightning.HybridConvGRUCTCModule
+  in_features: 396  # freq * channels = (n_fft // 2 + 1) * 12 = 33 * 12
+  electrode_channels: 12
+  mlp_features: [384]
+  block_channels: 24  # Single shallow TDS Conv block (must evenly divide 768)
+  kernel_width: 16
+  hidden_size: 384  # Per direction; 384 * 2 = 768 = num_features when bidirectional
+  num_gru_layers: 2
+  dropout: 0.3
+  bidirectional: true
+  gradient_clip_val: 5.0
+
+datamodule:
+  _target_: emg2qwerty.lightning.WindowedEMGDataModule
+  window_length: 8000  # 4 sec windows for 2kHz EMG
+  padding: [1800, 200]  # 900ms past context, 100ms future context

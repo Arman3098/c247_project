@@ -1,0 +1,27 @@
+# @package _global_
+#
+# 8-channel electrode selection: evenly spaced from the 16-electrode ring.
+# Indices [0, 2, 4, 6, 8, 10, 12, 14] give maximum spatial coverage.
+#
+electrode_indices: null
+per_band_electrode_indices:
+  - [1, 2, 5, 7, 10, 12, 14, 15]   # left band
+  - [0, 2, 4, 6, 8, 10, 12, 14]   # right band
+
+module:
+  _target_: emg2qwerty.lightning.HybridConvGRUCTCModule
+  in_features: 264  # freq * channels = (n_fft // 2 + 1) * 8 = 33 * 8
+  electrode_channels: 8
+  mlp_features: [384]
+  block_channels: 24  # Single shallow TDS Conv block (must evenly divide 768)
+  kernel_width: 16
+  hidden_size: 384  # Per direction; 384 * 2 = 768 = num_features when bidirectional
+  num_gru_layers: 2
+  dropout: 0.3
+  bidirectional: true
+  gradient_clip_val: 5.0
+
+datamodule:
+  _target_: emg2qwerty.lightning.WindowedEMGDataModule
+  window_length: 8000  # 4 sec windows for 2kHz EMG
+  padding: [1800, 200]  # 900ms past context, 100ms future context

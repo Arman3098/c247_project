@@ -1,0 +1,18 @@
+# @package _global_
+module:
+  _target_: emg2qwerty.lightning.HybridConvGRUCTCModule
+  in_features: 528  # freq * channels = (n_fft // 2 + 1) * 16 = 33 * 16
+  electrode_channels: 16
+  mlp_features: [384]
+  block_channels: 24  # Single shallow TDS Conv block (must evenly divide 768)
+  kernel_width: 16  # Temporal receptive field of 15 samples from 1 conv layer
+  hidden_size: 384  # Per direction; 384 * 2 = 768 = num_features when bidirectional
+  num_gru_layers: 2
+  dropout: 0.3
+  bidirectional: true
+  gradient_clip_val: 5.0
+
+datamodule:
+  _target_: emg2qwerty.lightning.WindowedEMGDataModule
+  window_length: 8000  # 4 sec windows for 2kHz EMG
+  padding: [1800, 200]  # 900ms past context, 100ms future context
